@@ -113,5 +113,34 @@ data/raw/
 /docs/**/*.md
 !/docs/EVALUATION.md
 
-# Academic graduation/coursework report (kept local, not pushed to GitHub)
-/report/
+# ==========================================
+# 7. Academic Report: Only track files related to main.pdf
+# ==========================================
+/report/*
+!/report/main.tex
+!/report/main.pdf
+!/report/section/
+/report/section/*
+!/report/section/section[1-5].tex
+!/report/section/ref.tex
+!/report/image/
+/report/image/*
+!/report/image/Logo.png
+!/report/generated/
+/report/generated/*
+!/report/generated/numbers.tex
+
+# LaTeX intermediate build artifacts
+report/**/*.aux
+report/**/*.log
+report/**/*.out
+report/**/*.toc
+report/**/*.lof
+report/**/*.lot
+report/**/*.thm
+report/**/*.synctex.gz
+report/**/*.fls
+report/**/*.fdb_latexmk
+report/build_*.log
+
+

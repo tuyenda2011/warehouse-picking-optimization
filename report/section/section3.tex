@@ -1,0 +1,432 @@
+\section{THIẾT KẾ VÀ PHÂN TÍCH CÁC THUẬT TOÁN}
+\label{sec:chuong3}
+
+\subsection{Quy trình giải bài toán}
+Chương này trình bày cách năm phương pháp được áp dụng vào mô hình ở Chương 2: First-Come, First-Served Batching (B0), Greedy Batching (B2), Large Neighborhood Search (LNS), Adaptive Large Neighborhood Search (ALNS) và Variable Neighborhood Search (VNS). Cấu trúc nghiệm là danh sách chuyến của từng nhân viên trong \eqref{eq:model-plan}; chất lượng được tính bằng \eqref{eq:model-objective}. Các phương pháp khác nhau ở cách tạo và thay đổi nghiệm, nhưng dùng cùng các đại lượng quãng đường, makespan và độ trễ.
+
+Quy trình bắt đầu bằng kiểm tra đầu vào, tính khoảng cách trên đồ thị và xây dựng B0 để cố định thang chuẩn hóa. Nếu chọn B0, chương trình sử dụng nghiệm này làm đầu ra. Các phương pháp còn lại tạo B2; riêng LNS, ALNS và VNS tiếp tục cải thiện từ B2. Sau cùng, chương trình xuất tuyến, lịch, chỉ tiêu và kiểm chứng chúng trước khi trả kết quả.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.55cm,every node/.style={font=\small}]
+\node[chthreeblue,text width=9cm] (input) {Kiểm tra đầu vào, tính khoảng cách và tạo B0 làm mốc};
+\node[chthreegreen,text width=9cm,below=of input] (initial) {Chọn B0 hoặc khởi tạo B2};
+\node[chthreepurple,text width=9cm,below=of initial] (search) {LNS, ALNS hoặc VNS cải thiện nghiệm từ B2};
+\node[chthreeblue,text width=9cm,below=of search] (decode) {Xuất tuyến, lịch và các chỉ tiêu};
+\node[chthreeorange,text width=9cm,below=of decode] (check) {Kiểm chứng kết quả và trả nghiệm};
+\draw[chthreeflow] (input)--(initial);
+\draw[chthreeflow] (initial)--node[right]{Tìm kiếm}(search);
+\draw[chthreeflow] (search)--(decode);
+\draw[chthreeflow] (decode)--(check);
+\draw[chthreedash] (initial.west)--++(-0.8,0)|-node[pos=0.7,left]{B0/B2}(decode.west);
+\end{tikzpicture}
+\caption{Quy trình giải và kiểm chứng của năm phương pháp.}\label{fig:solver-flow}
+\end{figure}
+
+Ngân sách tìm kiếm của LNS, ALNS và VNS được tính từ trước khi tạo B2, nên bao gồm khởi tạo và tìm kiếm. Tiền xử lý, tạo mốc B0 và kiểm chứng đầu ra được đo riêng. Chương trình dừng theo ngân sách thời gian hoặc số vòng tối đa; các điểm kiểm tra thời gian không ngắt tức thời một phép dựng tuyến hoặc đánh giá đang thực hiện. Vì vậy, thời gian chạy tổng không được đồng nhất với ngân sách tìm kiếm, cũng không phải makespan của kế hoạch.
+
+\subsection{Định tuyến, lập lịch và đánh giá nghiệm}
+
+\subsubsection{Xây dựng tuyến bằng Nearest Neighbor}
+Với tập vị trí $U(B)$ của một chuyến, Nearest Neighbor bắt đầu tại depot. Tại mỗi bước, thuật toán chọn vị trí chưa phục vụ gần nhất theo khoảng cách đường đi ngắn nhất $\delta$; mã vị trí dùng để phá hòa. Sau khi phục vụ các vị trí yêu cầu ngoài depot, tuyến quay về depot. Dãy điểm dừng được mở rộng thành đường đi trên đồ thị như đã mô tả ở mục 2.2.
+
+Quy tắc chọn tại điểm $u$ có thể viết
+\begin{equation}
+ u^*=\arg\min_{z\in U_{\rm remaining}}(\delta(u,z),\operatorname{id}(z)).\label{eq:nn-choice}
+\end{equation}
+Đây là lựa chọn tham lam từng bước, không bảo đảm tuyến ngắn nhất trên toàn bộ tập vị trí. Với $r$ vị trí ngoài depot và tra cứu khoảng cách đã có, việc chọn thứ tự điểm dừng cần $O(r^2)$ phép xét. Chi phí mở rộng đường đi vật lý được tính thêm theo độ dài dãy đỉnh xuất ra. B0 dùng trực tiếp quy tắc này; bốn phương pháp còn lại kết hợp với 2-Opt.
+
+\subsubsection{Cải thiện tuyến bằng 2-Opt}
+2-Opt xét hai cạnh $(a,b)$ và $(c,d)$ trong tuyến. Trên đồ thị vô hướng, đảo đoạn giữa $b$ và $c$ thay hai cạnh này bằng $(a,c)$ và $(b,d)$. Độ thay đổi quãng đường là
+\begin{equation}
+ \Delta_D=\delta(a,c)+\delta(b,d)-\delta(a,b)-\delta(c,d).\label{eq:two-opt-delta}
+\end{equation}
+Trong cài đặt, một biến đổi được nhận nếu $\Delta_D<-10^{-9}$. Thuật toán nhận cặp cải thiện đầu tiên theo thứ tự vòng lặp, đảo đoạn rồi bắt đầu lượt quét mới. Quá trình kết thúc khi một lượt quét không tìm thấy cải thiện; depot được giữ ở hai đầu tuyến.
+
+Nếu $\rho$ là số lần đảo đoạn được nhận, chi phí xét cặp là $O((\rho+1)r^2)$, bao gồm lượt cuối không cải thiện. Đảo một đoạn còn cần $O(r)$ thao tác. Không xem $\rho$ là hằng số hoặc mặc định số lượt cải thiện có cận đa thức theo $r$. Điều kiện dừng chỉ cho biết không còn cải thiện bằng phép đổi đang xét trong dung sai, không chứng minh tuyến tối ưu toàn cục.
+
+\subsubsection{Phân công nhân viên và xây dựng lịch thực hiện}
+Sau bước gom đơn cơ sở, các chuyến được sắp theo hạn nhỏ nhất của các đơn thành viên. Khi bằng nhau, chương trình giữ thứ tự chỉ số chuyến đã tạo. Lần lượt từng chuyến được giao cho nhân viên có thời điểm rảnh sớm nhất; mã nhân viên dùng để phá hòa. Thời điểm rảnh được cập nhật bằng thời lượng chuyến trong \eqref{eq:model-duration}.
+
+Nếu có $b_{
+m trip}$ chuyến, xác định hạn nhỏ nhất cần xét tổng cộng $n$ đơn; sắp chuyến cần $O(b_{
+m trip}\log b_{
+m trip})$, còn lựa chọn nhân viên bằng quét danh sách cần $O(b_{
+m trip}m)$. Chi phí tính thời lượng và tuyến được cộng riêng. Quy tắc gom theo thứ tự của B0 vì vậy không đồng nghĩa với việc mọi chuyến được thực hiện theo thứ tự đơn đến.
+
+Trong tìm kiếm, phân công và thứ tự chuyến là một phần của nghiệm, có thể được thay đổi trực tiếp. Chương trình không tự sắp lại tất cả chuyến theo hạn sau mỗi biến đổi, vì thao tác đó có thể xóa quyết định lập lịch vừa tạo. Lịch được tính lại theo từng danh sách chuyến bằng \eqref{eq:model-schedule}.
+
+\subsubsection{Tính giá trị mục tiêu và kiểm tra ràng buộc}
+Một ứng viên hoàn chỉnh phải phục vụ đủ đơn, không trùng đơn và đúng sức chứa trước khi được xem là nghiệm đầu ra. Bộ đánh giá dựng tuyến theo chế độ đang dùng, tính thời lượng, lịch và các thành phần trong $F$. Khi một chuyến thay đổi, thời điểm của các chuyến phía sau cùng nhân viên cũng có thể thay đổi; không chỉ tính chi phí riêng của đơn vừa di chuyển.
+
+Trong phá hủy--tái thiết, bộ đánh giá có thể nhận trạng thái tạm thiếu đơn để xếp hạng hành động chèn. Khi đó, chỉ tiêu chỉ được tính trên các đơn đang có trong trạng thái, nhưng thang chuẩn hóa vẫn cố định từ B0 của đầu vào đầy đủ. Điểm của trạng thái tạm không được coi là chất lượng một nghiệm hoàn chỉnh hoặc cận dưới đã chứng minh của bài toán.
+
+Tuyến, thông tin chuyến và các tiền tố lịch được lưu trong bộ nhớ đệm để tái sử dụng khi cấu trúc tương ứng không đổi. Sau khi chọn đầu ra, bộ kiểm chứng đối chiếu đường đi, tải, thời gian và chỉ tiêu từ kết quả xuất ra. Cách tổ chức này gắn giá trị mục tiêu với kế hoạch thực sự được trình bày, thay vì chỉ tin vào một điểm số trung gian.
+
+\subsection[First-Come, First-Served Batching]{First-Come, First-Served Batching (B0)}
+
+\subsubsection{Ý tưởng và nguyên lý}
+B0 tạo nghiệm cơ sở bằng cách duyệt các đơn theo thứ tự đầu vào. Chương trình sắp theo trường thứ tự, rồi theo mã đơn nếu bằng nhau. Mỗi đơn được thêm vào chuyến hiện tại nếu vừa sức chứa; nếu không, chuyến hiện tại được đóng và một chuyến mới được mở. Đầu vào bảo đảm từng đơn riêng lẻ vừa xe, nên bước này có thể phục vụ đủ đơn mà không cần tách đơn.
+
+B0 không lựa chọn đơn theo độ gần vị trí hoặc mức giảm mục tiêu. Tuyến mỗi chuyến dùng Nearest Neighbor, còn phân công chuyến dùng quy tắc ở mục 3.2.3. Vai trò của B0 là cung cấp một kế hoạch dễ giải thích và mốc chuẩn hóa nhất quán, không phải một cận tối ưu.
+
+\subsubsection{Các bước thực hiện và giả mã}
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\linewidth}{rX}
+\toprule
+Bước & Thao tác \\
+\midrule
+ & Đầu vào: tập đơn, tải đơn, sức chứa, đồ thị và thông số vận hành. Đầu ra: nghiệm B0. \\
+1 & Sắp đơn theo thứ tự đầu vào; phá hòa bằng mã đơn. \\
+2 & Khởi tạo danh sách chuyến rỗng, chuyến hiện tại $B=\varnothing$ và tải $w=0$. \\
+3 & Với mỗi đơn $i$, nếu $B\neq\varnothing$ và $w+w_i>Q$ thì lưu $B$, đặt $B=\varnothing$ và $w=0$. \\
+4 & Thêm $i$ vào $B$ và cập nhật tải. \\
+5 & Sau khi duyệt hết đơn, lưu chuyến cuối nếu không rỗng. \\
+6 & Tạo tuyến bằng Nearest Neighbor; sắp chuyến theo hạn nhỏ nhất và giao cho nhân viên rảnh sớm nhất. \\
+7 & Tính lịch, chỉ tiêu, thang chuẩn hóa; kiểm chứng và trả nghiệm. \\
+\bottomrule
+\end{tabularx}
+\caption{Giả mã B0 theo cài đặt của đề tài.}\label{tab:b0-pseudocode}
+\end{table}
+Các phép kiểm tra sức chứa trong mã có dùng dung sai số thực; giả mã viết điều kiện toán học để làm rõ ý tưởng. Các bước giải mã và kiểm chứng được tách ra để không lặp toàn bộ công thức của Chương 2.
+
+\subsubsection{Ví dụ minh họa}
+Với ví dụ ở mục 2.7, thứ tự đầu vào là $O_1,O_2,O_3,O_4$ và xe chứa được hai đơn. B0 tạo hai chuyến $\{O_1,O_2\}$ và $\{O_3,O_4\}$. Hai chuyến cùng có hạn nhỏ nhất là $7$ phút, nên được xét theo thứ tự tạo và giao cho hai nhân viên. Quãng đường lần lượt là $16$ và $18$ mét; thời lượng là $11$ và $12$ phút.
+
+Theo \tabref{tab:example-comparison}, B0 có $D=34$, $C_{\max}=12$, $T=9$ và $F\approx0{,}729167$. Việc ghép đơn gần depot với đơn xa làm các đơn có hạn gần phải chờ chuyến quay về. Ví dụ minh họa hạn chế của quy tắc gom theo thứ tự trên đầu vào này, không khẳng định B0 kém hơn trên mọi bài.
+
+\subsubsection{Phân tích chi phí tính toán và đặc điểm thuật toán}
+Sắp đơn cần $O(n\log n)$, còn duyệt tải và tạo chuyến cần $O(n)$. Cần cộng chi phí lập lịch và dựng tuyến cho từng chuyến; do đó, không mô tả toàn bộ B0 chỉ bằng $O(n\log n)$. Chi phí tiền xử lý đồ thị được trình bày riêng ở mục 3.8.
+
+B0 tất định với cùng đầu vào và quy tắc phá hòa. Nó dễ tái lập, tạo nghiệm khả thi theo sức chứa và ít quyết định tìm kiếm, nhưng không trực tiếp tối ưu quan hệ giữa vị trí, hạn và tải công việc. Giá trị của B0 nằm ở vai trò mốc so sánh và kiểm tra, không phải bảo đảm chất lượng gần tối ưu.
+
+\subsection[Greedy Batching]{Greedy Batching (B2)}
+
+\subsubsection{Ý tưởng và nguyên lý}
+B2 chọn đơn có hạn sớm nhất trong tập chưa phục vụ làm hạt giống; mã đơn dùng để phá hòa. Trong các đơn còn vừa sức chứa, thuật toán chọn đơn làm tăng ít nhất quãng đường Nearest Neighbor của chuyến. Quy tắc được lặp đến khi không còn đơn vừa tải, rồi mở chuyến mới.
+
+Gọi $B$ là chuyến đang tạo, tiêu chí thêm đơn là
+\begin{equation}
+ \Delta_i^{\rm NN}=D_{\rm NN}(B\cup\{i\})-D_{\rm NN}(B),\qquad
+ i^*=\arg\min_{i:\,\text{vừa tải}}(\Delta_i^{\rm NN},d_i,\operatorname{id}(i)).\label{eq:greedy-batching-choice}
+\end{equation}
+Hạn chỉ quyết định hạt giống và phá hòa của bước chọn này. B2 chưa xét trực tiếp toàn bộ $F$ khi ghép đơn. Sau khi gom, chương trình dùng Nearest Neighbor kết hợp 2-Opt để tạo tuyến cuối, rồi phân công và lập lịch như mục 3.2.3. Cần phân biệt tiêu chí gom dựa trên tuyến Nearest Neighbor với tuyến đã được cải thiện của nghiệm xuất ra.
+
+\subsubsection{Các bước thực hiện và giả mã}
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\linewidth}{rX}
+\toprule
+Bước & Thao tác \\
+\midrule
+ & Đầu vào: các dữ liệu của B0 và thang chuẩn hóa cố định. Đầu ra: nghiệm B2. \\
+1 & Khởi tạo tập đơn chưa phục vụ $R=O$ và danh sách chuyến rỗng. \\
+2 & Khi $R\neq\varnothing$, lấy đơn có $(d_i,\operatorname{id}(i))$ nhỏ nhất làm chuyến $B$ và bỏ khỏi $R$. \\
+3 & Lập tập các đơn trong $R$ có thể thêm vào $B$ mà không vượt tải. \\
+4 & Nếu tập này rỗng, lưu $B$ và quay lại bước 2. \\
+5 & Tính $\Delta_i^{\rm NN}$ cho từng đơn khả thi; chọn theo \eqref{eq:greedy-batching-choice}. \\
+6 & Thêm đơn đã chọn vào $B$, bỏ khỏi $R$ và quay lại bước 3. \\
+7 & Dựng tuyến cuối bằng Nearest Neighbor và 2-Opt; phân công, lập lịch, đánh giá và kiểm chứng. \\
+\bottomrule
+\end{tabularx}
+\caption{Giả mã B2 theo cài đặt của đề tài.}\label{tab:b2-pseudocode}
+\end{table}
+
+\subsubsection{Ví dụ minh họa}
+Trong ví dụ bốn đơn, $O_1$ và $O_3$ cùng có hạn $7$ phút; B2 chọn $O_1$ do mã nhỏ hơn. Chuyến đơn $\{O_1\}$ có quãng đường $4$ mét. Thêm $O_3$ làm quãng đường thành $6$ mét, tăng $2$ mét; thêm $O_2$ làm thành $16$ mét, tăng $12$ mét; thêm $O_4$ làm thành $18$ mét, tăng $14$ mét. Cả ba đều vừa tải, nên B2 ghép $O_3$ vào chuyến đầu.
+
+Xe đã đầy, nên $O_2$ và $O_4$ được gom ở chuyến sau. Phân công mỗi nhân viên một chuyến tạo phương án B2 trong \tabref{tab:example-comparison}, với $D=24$, $C_{\max}=12$, $T=0$ và $F\approx0{,}568627$. Trên lối đi này, 2-Opt không làm giảm thêm quãng đường. Vì vậy, phần giảm đường đi trong riêng ví dụ đến từ cách gom; điều này không được suy rộng cho mọi so sánh B0--B2.
+
+\subsubsection{Phân tích chi phí tính toán và đặc điểm thuật toán}
+Mỗi lần thêm đơn có thể xét nhiều đơn còn lại. Với tối đa $n$ lần lựa chọn và tối đa $n$ ứng viên mỗi lần, số lượt tính phương án thêm có cận $O(n^2)$. Mỗi lượt vẫn cần xác định vị trí và quãng đường chuyến; sắp các đơn còn lại theo mã còn tạo chi phí riêng. Khi gọi $\mathcal C_{\rm cand}$ là chi phí tính một ứng viên gom, phần kiến tạo có cận dạng $O(n^2(\log n+\mathcal C_{\rm cand}))$, chưa gồm tuyến cuối và lập lịch.
+
+B2 tất định và xét độ gần của nhóm đơn, nhưng tiêu chí tham lam cục bộ không trực tiếp tối thiểu hóa $F$. Một phép ghép tiết kiệm đường đi có thể làm tăng thời điểm hoàn thành hoặc trễ hạn. B2 do đó không được bảo đảm luôn tốt hơn B0. Vai trò tiếp theo của B2 là nghiệm khởi tạo khả thi để LNS, ALNS và VNS có một mốc xuất phát chung.
+
+\subsection[Large Neighborhood Search]{Large Neighborhood Search (LNS)}
+
+\subsubsection{Ý tưởng và nguyên lý}
+LNS cải thiện một nghiệm bằng cách loại bỏ một phần các đơn rồi chèn chúng trở lại để tạo cấu trúc khác. Nguyên lý này kế thừa hướng tìm kiếm lân cận lớn của Shaw \cite{shaw1998}; các thao tác và tiêu chí chèn dưới đây mô tả riêng cài đặt của đề tài. LNS bắt đầu từ B2, lưu nghiệm hiện tại $X$ và nghiệm tốt nhất $X^*$ riêng biệt. Các toán tử phá hủy và tái thiết được chọn với trọng số bằng nhau.
+
+Cấu hình dùng trong thực nghiệm chính có bốn toán tử phá hủy. Random Removal lấy mẫu đơn ngẫu nhiên. Related Removal chọn một đơn hạt giống $i_0$ rồi xếp các đơn theo mức liên quan
+\begin{equation}
+ r(i_0,i)=\frac{\min_{u\in U(\{i_0\}),z\in U(\{i\})}\delta(u,z)}{D_{\rm ref}}
+ +\frac{|d_{i_0}-d_i|}{C_{\rm ref}},\label{eq:related-removal}
+\end{equation}
+phá hòa bằng mã đơn. Late Removal ưu tiên độ trễ giảm dần, rồi hạn và mã đơn. Batch Removal chọn một chuyến ngẫu nhiên và lấy toàn bộ đơn của chuyến đó ra. Các chuyến rỗng sau phá hủy được loại khỏi danh sách.
+
+Với ba toán tử đầu, số đơn rút là
+\begin{equation}
+ q=\min\{n,q_{\max},\max(1,\lceil\eta n\rceil)\}.\label{eq:removal-size}
+\end{equation}
+Trong cấu hình chính, $\eta=0{,}15$ và $q_{\max}=6$. Batch Removal là ngoại lệ: nó bỏ cả chuyến, nên số đơn rút thực tế có thể lớn hơn $q_{\max}$. Cần dùng số đơn thực sự bị rút khi phân tích chi phí tái thiết.
+
+Một hành động tái thiết có thể chèn đơn vào chuyến còn vừa tải, hoặc tạo chuyến mới tại một vị trí trong lịch của một nhân viên. Mỗi hành động được đánh giá bằng mục tiêu trên trạng thái tạm. Nếu số hành động vượt giới hạn ứng viên, cài đặt chọn ngẫu nhiên một hành động tạo chuyến mới bắt buộc và lấy mẫu các hành động còn lại. Cách này duy trì khả năng chèn lại một đơn riêng lẻ vừa xe, nhưng không bảo đảm xét hành động tốt nhất trong toàn bộ không gian. Phần chính dùng lấy mẫu uniform; giới hạn $24$ áp dụng cho từng đơn đang xét, không phải cho toàn bộ lần tái thiết.
+
+Hai quy tắc tái thiết dùng chung các hành động trên. Greedy Repair chọn đơn có điểm chèn tốt nhất nhỏ nhất. Regret-2 Repair ưu tiên đơn có chênh lệch lớn nhất giữa hai lựa chọn tốt nhất:
+\begin{equation}
+ R_i=c_{i,2}-c_{i,1},\qquad c_{i,1}\leq c_{i,2}.\label{eq:regret-two}
+\end{equation}
+Sau khi chọn đơn, cả hai quy tắc thực hiện hành động tốt nhất của đơn đó, cập nhật trạng thái và đánh giá lại các đơn còn chờ. Nếu chỉ có một hành động, cài đặt đặt regret bằng vô cùng để ưu tiên đơn này. Các giá trị regret dựa trên danh sách ứng viên đã giữ, không nhất thiết dựa trên tất cả vị trí chèn có thể có.
+
+Mỗi năm vòng hoàn chỉnh trong cấu hình chính, ứng viên còn được cải thiện cục bộ với tối đa tám lần thử. Mỗi lần lấy mẫu chuyển/đổi đơn giữa hai chuyến hoặc đổi/chuyển một chuyến trong lịch. Chỉ biến đổi cải thiện $F$ mới được nhận trong bước cục bộ. Đây là bước có giới hạn số mẫu, không phải duyệt hết lân cận.
+
+Ứng viên hoàn chỉnh được xét chấp nhận theo cơ chế Simulated Annealing \cite{kirkpatrick1983}. Đặt $\Delta=F(Y)-F(X)$ và gọi $\theta$ là nhiệt độ tìm kiếm, khác với tổng độ trễ $T$ ở Chương 2:
+\begin{equation}
+ P_{\rm accept}(Y\mid X)=
+ \begin{cases}1,&\Delta\leq0,\\
+ \exp\!\left(-\Delta/\max(\theta,10^{-12})\right),&\Delta>0.
+ \end{cases}\label{eq:sa-acceptance}
+\end{equation}
+Nhiệt độ giảm sau mỗi vòng hoàn chỉnh theo $\theta\leftarrow\gamma\theta$, với $0<\gamma<1$. Việc cho phép nhận ứng viên xấu giúp thay đổi đường tìm kiếm, nhưng không bảo đảm thoát mọi cực trị hoặc tìm được tối ưu trong ngân sách hữu hạn.
+
+\subsubsection{Các bước thực hiện và giả mã}
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\linewidth}{rX}
+\toprule
+Bước & Thao tác \\
+\midrule
+ & Đầu vào: B2, thang chuẩn hóa, seed, toán tử và điều kiện dừng. Đầu ra: nghiệm tốt nhất đã lưu. \\
+1 & Đặt $X=X^*=B2$; tính điểm và khởi tạo nhiệt độ. \\
+2 & Khi còn số vòng và ngân sách, chọn một toán tử phá hủy và một toán tử tái thiết với trọng số bằng nhau. \\
+3 & Rút các đơn đã chọn khỏi $X$, loại chuyến rỗng để tạo trạng thái tạm. \\
+4 & Đánh giá các hành động chèn; dùng Greedy Repair hoặc Regret-2 Repair đến khi chèn lại đủ đơn. \\
+5 & Nếu đến chu kỳ cải thiện cục bộ, thực hiện các lần thử đã giới hạn; chỉ nhận cải thiện. \\
+6 & Tính $F(Y)$ của ứng viên hoàn chỉnh. Nếu hết thời gian trong bước 3--5, bỏ lần đang thực hiện và chuyển đến bước 10. \\
+7 & Chấp nhận $Y$ theo \eqref{eq:sa-acceptance}; nếu được nhận, đặt $X=Y$. \\
+8 & Nếu $F(Y)<F(X^*)-10^{-12}$ thì lưu $X^*=Y$. \\
+9 & Giảm nhiệt độ; chuyển sang vòng tiếp theo. Trọng số toán tử vẫn bằng $1$. \\
+10 & Kiểm chứng và trả $X^*$, không trả trạng thái tạm thiếu đơn. \\
+\bottomrule
+\end{tabularx}
+\caption{Giả mã LNS với lựa chọn toán tử đều.}\label{tab:lns-pseudocode}
+\end{table}
+Giả mã tách bước chấp nhận nghiệm hiện tại và bước ghi nhận nghiệm tốt nhất như cài đặt. Việc nhận một ứng viên xấu không xóa nghiệm tốt nhất đã có. Số vòng hoàn chỉnh có thể bằng $0$ nếu ngân sách đã hết sau khởi tạo.
+
+\subsubsection{Ví dụ minh họa}
+Để minh họa bước tái thiết trên dữ liệu ở mục 2.7, lấy $O_2,O_3$ ra khỏi phương án B0. Trạng thái còn lại có $\{O_1\}$ ở nhân viên thứ nhất và $\{O_4\}$ ở nhân viên thứ hai. Đây là một trạng thái minh họa cho thao tác, không phải tuyên bố rằng LNS khởi tạo từ B0; trong lượt giải chính, LNS khởi tạo từ B2.
+
+Với các hành động được xét đầy đủ trên bài nhỏ, hai điểm tốt nhất của mỗi đơn cần chèn là:
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lrrr}
+\toprule
+Đơn & Điểm tốt nhất $c_{i,1}$ & Điểm thứ hai $c_{i,2}$ & Regret \\
+\midrule
+$O_2$ & 0,549020 & 0,666667 & 0,117647 \\
+$O_3$ & 0,540850 & 0,583742 & 0,042892 \\
+\bottomrule
+\end{tabular}
+\caption{Các lựa chọn chèn trong ví dụ tái thiết hai đơn.}\label{tab:repair-example}
+\end{table}
+Greedy Repair chèn $O_3$ trước vì điểm tốt nhất nhỏ hơn; Regret-2 Repair chèn $O_2$ trước vì regret lớn hơn. Sau khi cập nhật và chèn đơn còn lại, cả hai cùng tạo các chuyến $\{O_1,O_3\}$ và $\{O_2,O_4\}$ với $F\approx0{,}568627$. Ví dụ làm rõ khác biệt trong thứ tự quyết định, không chứng minh hai quy tắc luôn cho cùng nghiệm hoặc quy tắc nào tốt hơn.
+
+Nếu một ứng viên có $\Delta=0{,}02$ tại $\theta=0{,}03$, xác suất nhận theo \eqref{eq:sa-acceptance} là $\exp(-0{,}02/0{,}03)\approx0{,}5134$. Đây là phép tính minh họa cơ chế chấp nhận, không phải xác suất thành công của LNS trên benchmark.
+
+\subsubsection{Phân tích chi phí tính toán và đặc điểm thuật toán}
+Nếu một lần tái thiết rút $q$ đơn và xét tối đa $A$ hành động cho mỗi đơn đang chờ, số lượt đánh giá hành động có cận
+\begin{equation}
+ A\sum_{j=1}^{q}j=\frac{Aq(q+1)}2.\label{eq:repair-evaluation-bound}
+\end{equation}
+Trong cấu hình chính, có thể lấy $A=24$; khi tắt giới hạn ứng viên, phải dùng số vị trí chèn thực tế. Mỗi lượt còn tốn chi phí sao chép nghiệm, giải mã tuyến, tính lịch và kiểm tra ràng buộc. Lập danh sách, tính regret và sắp lựa chọn cũng có chi phí, nên số vòng tìm kiếm không đủ để phản ánh toàn bộ thời gian tính toán.
+
+LNS có thể thay đổi nhiều đơn cùng lúc và xét ảnh hưởng lên cả ba thành phần mục tiêu. Tuy nhiên, chi phí tái thiết tăng theo số đơn rút; lấy mẫu ứng viên có thể bỏ lỡ vị trí tốt và Simulated Annealing cần tham số nhiệt độ. Trong dung sai ghi nhận nghiệm tốt nhất, đầu ra không kém B2 theo cùng bộ đánh giá. Tính chất này không bảo đảm tốt hơn một phương pháp tìm kiếm khác hoặc đạt tối ưu toàn cục.
+
+\subsection[Adaptive Large Neighborhood Search]{Adaptive Large Neighborhood Search (ALNS)}
+
+\subsubsection{Ý tưởng và nguyên lý}
+ALNS dùng cùng toán tử phá hủy, tái thiết, cải thiện cục bộ và cơ chế chấp nhận như LNS, nhưng điều chỉnh xác suất chọn toán tử dựa trên kết quả đã quan sát. Hướng lựa chọn thích ứng tham khảo Ropke và Pisinger \cite{ropke2006}; thang thưởng và cập nhật dưới đây là các quy tắc của cài đặt đang được đánh giá.
+
+Gọi $\omega_h>0$ là trọng số của toán tử $h$. Các toán tử phá hủy và tái thiết được chọn riêng trong từng nhóm $\mathcal D$ và $\mathcal R$:
+\begin{equation}
+ p_h=\frac{\omega_h}{\sum_{g\in\mathcal G}\omega_g},\qquad
+ \mathcal G\in\{\mathcal D,\mathcal R\}.\label{eq:operator-probability}
+\end{equation}
+Ban đầu mọi trọng số bằng $1$. Sau một vòng hoàn chỉnh, cả toán tử phá hủy và tái thiết đã dùng nhận cùng một điểm thưởng theo kết quả của ứng viên:
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\linewidth}{Xr}
+\toprule
+Kết quả của vòng tìm kiếm & Điểm thưởng \\
+\midrule
+Cải thiện nghiệm tốt nhất đã lưu & 8 \\
+Được chấp nhận và cải thiện nghiệm hiện tại, nhưng chưa cải thiện tốt nhất & 3 \\
+Được chấp nhận trong trường hợp còn lại & 1 \\
+Không được chấp nhận & 0 \\
+\bottomrule
+\end{tabularx}
+\caption{Điểm thưởng cho toán tử trong cài đặt ALNS.}\label{tab:operator-rewards}
+\end{table}
+Các điều kiện cải thiện dùng dung sai $10^{-12}$. Thưởng dựa trên ứng viên sau cả tái thiết và bước cục bộ nếu có; vì vậy nó là tín hiệu hiệu quả của một vòng kết hợp, không phải phép đo tác động độc lập của từng toán tử.
+
+Sau một phân đoạn, gọi $N_h$ là số lần toán tử được dùng và $R_h$ là tổng thưởng trong đoạn. Với $N_h>0$, trọng số được cập nhật bởi
+\begin{equation}
+ \omega_h\leftarrow\max\left\{0{,}05,(1-\lambda)\omega_h+\lambda\frac{R_h}{N_h}\right\}.\label{eq:operator-weight-update}
+\end{equation}
+Toán tử chưa được dùng giữ nguyên trọng số; sau cập nhật, số lần dùng và tổng thưởng của đoạn được đặt lại bằng $0$. Sàn $0{,}05$ giữ xác suất dương, nhưng không bảo đảm mọi toán tử được chọn trong một lượt chạy hữu hạn. Chương trình cũng cập nhật phần thống kê còn lại khi kết thúc lượt giải.
+
+\subsubsection{Các bước thực hiện và giả mã}
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\linewidth}{rX}
+\toprule
+Bước & Thao tác \\
+\midrule
+ & Đầu vào: dữ liệu của LNS, độ dài phân đoạn và hệ số phản ứng. Đầu ra: nghiệm tốt nhất đã lưu. \\
+1 & Đặt $X=X^*=B2$; khởi tạo nhiệt độ và mọi trọng số toán tử bằng $1$. \\
+2 & Đặt thống kê số lần dùng và tổng thưởng của từng toán tử bằng $0$. \\
+3 & Khi còn ngân sách và số vòng, chọn phá hủy và tái thiết theo \eqref{eq:operator-probability}. \\
+4 & Phá hủy, tái thiết và cải thiện cục bộ định kỳ như LNS. \\
+5 & Nếu hết thời gian trước khi hoàn tất ứng viên, bỏ vòng đang thực hiện và đến bước 12. \\
+6 & Tính $F(Y)$, đặt $\Delta=F(Y)-F(X)$; xét chấp nhận theo \eqref{eq:sa-acceptance}. \\
+7 & Nếu được nhận, cập nhật $X$ và thưởng $3$ khi cải thiện hiện tại, hoặc $1$ trong trường hợp còn lại. Nếu bị từ chối, thưởng $0$. \\
+8 & Nếu cải thiện $X^*$, lưu nghiệm tốt nhất và thay thưởng bằng $8$. \\
+9 & Cộng thưởng và tăng số lần dùng cho cả hai toán tử đã chọn. \\
+10 & Khi hết phân đoạn, cập nhật trọng số theo \eqref{eq:operator-weight-update} và đặt lại thống kê đoạn. \\
+11 & Giảm nhiệt độ; tiếp tục vòng sau. \\
+12 & Cập nhật thống kê đoạn còn lại; kiểm chứng và trả $X^*$. \\
+\bottomrule
+\end{tabularx}
+\caption{Giả mã ALNS với lựa chọn toán tử thích ứng.}\label{tab:alns-pseudocode}
+\end{table}
+Trong cấu hình của đợt benchmark chính, phân đoạn có $10$ vòng và $\lambda=0{,}25$. Cần phân biệt cấu hình thực nghiệm này với giá trị mặc định của lớp cấu hình. Nếu lượt chạy kết thúc trước một lần cập nhật được dùng cho các vòng tiếp theo, tác động của lựa chọn thích ứng có thể chưa xuất hiện trong quá trình tìm kiếm.
+
+\subsubsection{Ví dụ minh họa}
+Giả sử một toán tử có trọng số $1$, được dùng bốn lần trong đoạn và nhận tổng thưởng $12$. Với $\lambda=0{,}25$, cập nhật cho trọng số mới
+\begin{equation}
+ \omega_h'=\max\{0{,}05,0{,}75\times1+0{,}25\times12/4\}=1{,}5.\label{eq:operator-weight-example}
+\end{equation}
+Nếu ba toán tử phá hủy còn lại vẫn có trọng số $1$, xác suất chọn toán tử này trong nhóm tăng từ $1/4$ lên $1{,}5/4{,}5=1/3$. Ví dụ mô tả tác động của điểm thưởng lên xác suất, không kết luận toán tử đó luôn tạo nghiệm tốt.
+
+Bước tái thiết của ALNS vẫn có thể dùng các lựa chọn trong \tabref{tab:repair-example}. Điểm khác LNS nằm ở cách chọn toán tử qua các đoạn, không nằm ở việc thay đổi hàm mục tiêu hoặc tự động chọn hành động chèn tốt nhất trong toàn bộ không gian. Khi các toán tử tạo cùng kết quả trên một bài nhỏ, hai phương pháp có thể trả cùng điểm mà chưa cho phép kết luận thích ứng vô ích trên mọi dữ liệu.
+
+\subsubsection{Phân tích chi phí tính toán và đặc điểm thuật toán}
+Chi phí tạo ứng viên của ALNS có cùng cấu trúc với LNS. Phần bổ sung là lấy mẫu theo trọng số, ghi thưởng và cập nhật các toán tử theo phân đoạn. Với số toán tử nhỏ và cố định, phần này thường nhỏ hơn chi phí dựng tuyến và đánh giá nhiều hành động chèn, nhưng mức chênh lệch thời gian cần được đo thay vì mặc định bằng không.
+
+ALNS khai thác thông tin của các vòng đã chạy để thay đổi tần suất sử dụng toán tử. Hiệu quả phụ thuộc vào số vòng có thể hoàn thành, độ dài phân đoạn, hệ số phản ứng và đặc điểm đầu vào. LNS là đối chứng cho phần lựa chọn thích ứng khi giữ chung các thành phần khác. Trong ngân sách thời gian bằng nhau, số vòng và chuỗi ngẫu nhiên của hai phương pháp vẫn có thể khác; việc đánh giá cơ chế cần giữ phạm vi kết luận theo thiết kế thực nghiệm.
+
+Như LNS, ALNS trả nghiệm tốt nhất đã ghi nhận, nên dãy điểm tốt nhất không tăng và đầu ra không kém nghiệm khởi tạo trong dung sai. Nghiệm hiện tại có thể xấu đi do cơ chế chấp nhận. Hai tính chất này cần được phân biệt khi đọc đường hội tụ; chúng không tạo bảo đảm tối ưu toàn cục hoặc ưu thế của ALNS so với VNS.
+
+\subsection[Variable Neighborhood Search]{Variable Neighborhood Search (VNS)}
+
+\subsubsection{Ý tưởng và nguyên lý}
+VNS thay đổi cấu trúc lân cận để tìm kiếm từ nhiều cách biến đổi nghiệm, theo nguyên lý của Mladenović và Hansen \cite{mladenovic1997}. Cài đặt của đề tài bắt đầu từ B2, thực hiện rung lắc rồi cải thiện bằng một số mẫu lân cận có giới hạn. Nghiệm sau bước này chỉ thay thế nghiệm tốt nhất khi có cải thiện; VNS không dùng cơ chế Simulated Annealing của LNS và ALNS.
+
+Ba nhóm lân cận được dùng là Order Neighborhood, Schedule Neighborhood và Batch Neighborhood. Nhóm thứ nhất chuyển một đơn giữa hai chuyến hoặc đổi hai đơn thuộc hai chuyến, với tải sau thay đổi không vượt sức chứa. Nhóm thứ hai đổi hai chuyến hoặc lấy một chuyến ra rồi chèn vào vị trí khác, có thể chuyển sang nhân viên khác. Nhóm thứ ba tách một phần đơn thành chuyến mới, hoặc gộp hai chuyến nếu tổng tải cho phép. Chuyến rỗng sau biến đổi được loại bỏ; thao tác không khả thi có thể trả lại nghiệm ban đầu.
+
+Gọi $\kappa\in\{1,\ldots,6\}$ là mức rung lắc. Nhóm được chọn theo
+\begin{equation}
+ g=1+((\kappa-1)\bmod3),\label{eq:vns-shaking-group}
+\end{equation}
+và một lần rung lắc gọi nhóm đó $\kappa$ lần liên tiếp. Mức lớn hơn vì vậy tăng số thao tác được thử, không bảo đảm mỗi thao tác tạo ra một thay đổi khác biệt.
+
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\linewidth}{lXl}
+\toprule
+Mức rung lắc & Nhóm lân cận & Số lần gọi \\
+\midrule
+$1,4$ & Chuyển hoặc đổi đơn giữa các chuyến & $1,4$ \\
+$2,5$ & Đổi hoặc chuyển vị trí chuyến trong lịch & $2,5$ \\
+$3,6$ & Tách hoặc gộp chuyến & $3,6$ \\
+\bottomrule
+\end{tabularx}
+\caption{Quan hệ giữa mức rung lắc và nhóm lân cận của VNS.}\label{tab:vns-neighborhoods}
+\end{table}
+
+Sau rung lắc, bước cải thiện bắt đầu từ nhóm chuyển/đổi đơn. Nếu một mẫu làm giảm $F$ quá dung sai $10^{-12}$, ứng viên được cập nhật và việc chọn nhóm quay về nhóm đầu. Nếu không, chuyển tuần hoàn sang nhóm tiếp theo. Tổng số lần thử bị giới hạn bởi tham số cải thiện cục bộ; cấu hình chính dùng tám lần. Cách này là cải thiện trên mẫu, không phải duyệt hết lân cận hoặc xác nhận một cực trị cục bộ đầy đủ.
+
+Nếu ứng viên cuối tốt hơn nghiệm tốt nhất, chương trình nhận ứng viên và đặt $\kappa=1$. Nếu không, giữ nghiệm tốt nhất và đặt $\kappa\leftarrow1+(\kappa\bmod6)$. Rung lắc có thể tạo ứng viên tạm xấu hơn, nhưng ứng viên đó không được trả như nghiệm tốt nhất chỉ vì đã được tạo ra.
+
+\subsubsection{Các bước thực hiện và giả mã}
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\linewidth}{rX}
+\toprule
+Bước & Thao tác \\
+\midrule
+ & Đầu vào: B2, seed, ba nhóm lân cận và điều kiện dừng. Đầu ra: nghiệm tốt nhất đã lưu. \\
+1 & Đặt $X^*=B2$, tính $F(X^*)$ và khởi tạo $\kappa=1$. \\
+2 & Khi còn ngân sách và số vòng, đặt ứng viên $Y=X^*$. \\
+3 & Chọn nhóm $g$ theo \eqref{eq:vns-shaking-group}; áp dụng nhóm này $\kappa$ lần để rung lắc $Y$. \\
+4 & Tính $F(Y)$ và đặt nhóm cải thiện $j=1$. \\
+5 & Trong số lần thử cho phép, lấy một mẫu $Z$ từ nhóm $j$ của $Y$ và tính $F(Z)$. \\
+6 & Nếu $F(Z)<F(Y)-10^{-12}$, đặt $Y=Z$ và $j=1$; nếu không, đặt $j=1+(j\bmod3)$. \\
+7 & Nếu $F(Y)<F(X^*)-10^{-12}$, lưu $X^*=Y$ và đặt $\kappa=1$; nếu không, tăng mức tuần hoàn. \\
+8 & Nếu phát hiện hết thời gian trong lần đang thực hiện, dừng và giữ nghiệm tốt nhất đã ghi nhận. \\
+9 & Kiểm chứng và trả $X^*$. \\
+\bottomrule
+\end{tabularx}
+\caption{Giả mã VNS với cải thiện lân cận trên số mẫu giới hạn.}\label{tab:vns-pseudocode}
+\end{table}
+
+\subsubsection{Ví dụ minh họa}
+Phương án $X$ ở mục 2.7 giao hai chuyến $\{O_1,O_3\}$ và $\{O_2,O_4\}$ cho cùng một nhân viên. Một thao tác thuộc Schedule Neighborhood chuyển chuyến thứ hai sang nhân viên đang không có chuyến, giữ nguyên tập đơn và tuyến của hai chuyến. Khi đó, hai chuyến cùng bắt đầu tại $0$, makespan giảm từ $18$ xuống $12$ phút và tổng độ trễ giảm từ $12$ xuống $0$; quãng đường vẫn là $24$ mét.
+
+Điểm mục tiêu giảm từ $0{,}818627$ xuống $0{,}568627$, chênh lệch $0{,}25$ với cùng thang chuẩn hóa. Đây là minh họa một thao tác lập lịch được hỗ trợ trong cài đặt, không phải mô tả một lượt VNS khởi tạo từ $X$. Lượt giải của VNS vẫn khởi tạo từ B2; ví dụ cho thấy vì sao lân cận phân công chuyến có thể hữu ích khi kế hoạch hiện tại mất cân bằng.
+
+Trong ví dụ khác của cùng tập đơn, một bước chuyển/đổi đơn có thể thay đổi nhóm vị trí cần ghé; tách/gộp chuyến có thể thay đổi cả thời gian chuẩn bị và lịch. Các biến đổi này cần được so sánh bằng toàn bộ $F$, không chỉ bằng khoảng cách của một đơn hay một chuyến.
+
+\subsubsection{Phân tích chi phí tính toán và đặc điểm thuật toán}
+Một vòng VNS gọi tối đa sáu thao tác rung lắc và $\ell$ thao tác cải thiện, trong đó $\ell=8$ ở cấu hình chính. Sau rung lắc có một lượt tính điểm; mỗi mẫu cải thiện có thêm một lượt. Gọi $\mathcal C_N$ là chi phí tạo một biến đổi và $\mathcal C_F$ là chi phí đánh giá một nghiệm, phần tìm kiếm qua $I$ vòng có cận dạng
+\begin{equation}
+ O\!\left(I\left[(6+\ell)\mathcal C_N+(1+\ell)\mathcal C_F\right]\right).\label{eq:vns-cost}
+\end{equation}
+Chi phí khởi tạo, xuất và kiểm chứng được cộng riêng. $\mathcal C_N$ gồm sao chép cấu trúc, kiểm tra tải và chuẩn hóa danh sách đơn; $\mathcal C_F$ vẫn phụ thuộc vào tuyến, lịch và bộ nhớ đệm. Khi dừng theo thời gian, $I$ là số vòng thực sự hoàn thành, không phải luôn bằng giới hạn cấu hình. Nếu một vòng bị ngắt, chi phí đã thực hiện của vòng đó còn phải cộng vào thời gian chạy thực tế.
+
+VNS tác động trực tiếp lên gom đơn và lịch, không cần tái chèn toàn bộ một tập đơn đã rút. Tuy nhiên, số mẫu hữu hạn có thể bỏ lỡ biến đổi tốt; một thao tác thất bại hoặc trả lại nghiệm cũ vẫn tiêu tốn thời gian. Nghiệm tốt nhất không bị thay bằng ứng viên xấu, nhưng việc tuần hoàn lân cận không tạo bảo đảm thoát mọi cực trị hoặc tìm tối ưu toàn cục.
+
+\subsection{So sánh cơ chế và phân tích chi phí tính toán}
+Các phương pháp được đối chiếu theo thành phần cài đặt, không chỉ theo tên gọi. \tabref{tab:method-mechanisms} cho thấy B2 và ba phương pháp tìm kiếm dùng chung bước định tuyến cuối; LNS và ALNS giữ chung cơ chế tạo ứng viên, còn VNS thay đổi cấu trúc tìm kiếm.
+
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\linewidth}{lXXX}
+\toprule
+Phương pháp & Tạo nghiệm hoặc ứng viên & Định tuyến & Chấp nhận trong tìm kiếm \\
+\midrule
+B0 & Gom theo thứ tự đầu vào & Nearest Neighbor & Không có pha tìm kiếm \\
+B2 & Gom tham lam theo hạn và tăng quãng đường & Nearest Neighbor và 2-Opt & Không có pha tìm kiếm \\
+LNS & Phá hủy--tái thiết, chọn toán tử đều & Nearest Neighbor và 2-Opt & Simulated Annealing; lưu tốt nhất riêng \\
+ALNS & Phá hủy--tái thiết, chọn toán tử thích ứng & Nearest Neighbor và 2-Opt & Như LNS; thêm cập nhật trọng số \\
+VNS & Rung lắc và cải thiện trên mẫu lân cận & Nearest Neighbor và 2-Opt & Chỉ cập nhật tốt nhất khi cải thiện \\
+\bottomrule
+\end{tabularx}
+\caption{Đối chiếu các thành phần của năm phương pháp.}\label{tab:method-mechanisms}
+\end{table}
+
+Gọi $N_V=|V|$, $N_E=|E|$ và $h$ là số vị trí nguồn được tiền xử lý, gồm depot và các vị trí sản phẩm phân biệt. Với cách dùng Dijkstra trong chương trình, chi phí tiền xử lý khoảng cách có dạng $O(h(N_V+N_E)\log N_V)$, còn bảng khoảng cách và truy vết dùng bộ nhớ $O(hN_V)$ ngoài đồ thị. Phần này phục vụ chung các lần tính tuyến trong một lượt giải, không được coi là chi phí bằng không.
+
+Để mô tả chi phí còn lại, gọi $\mathcal C_B(B)$ là chi phí tính thông tin một chuyến, gồm vị trí cần ghé, tải, tuyến và thời lượng; $\mathcal C_E$ là chi phí tạo và chấm một hành động chèn; $\mathcal C_F$ là chi phí chấm nghiệm. Các đại lượng này phụ thuộc kích thước chuyến, số điểm lấy hàng, số lần cải thiện 2-Opt và trạng thái bộ nhớ đệm. Không mặc định mỗi lần đánh giá chỉ cần thời gian hằng số.
+
+\begin{table}[H]
+\centering\small
+\begin{tabularx}{\linewidth}{lX}
+\toprule
+Thành phần & Chi phí hoặc số thao tác cần phân biệt \\
+\midrule
+B0 & Sắp đơn $O(n\log n)$; gom $O(n)$; lập lịch $O(b_{\rm trip}\log b_{\rm trip}+b_{\rm trip}m)$; cộng thông tin tuyến/chuyến. \\
+B2 & Tối đa $O(n^2)$ lượt xét thêm đơn, mỗi lượt có chi phí ứng viên; cộng sắp các đơn còn lại, tuyến cuối và lập lịch. \\
+Tái thiết LNS/ALNS & Với $q$ đơn rút và tối đa $A$ hành động mỗi đơn: không quá $Aq(q+1)/2$ lượt chấm hành động, ngoài lập và sắp lựa chọn. \\
+Thích ứng ALNS & Ghi thưởng, lấy mẫu theo trọng số và cập nhật theo phân đoạn; không thay thế chi phí tái thiết. \\
+VNS & Mỗi vòng có tối đa $6+\ell$ lần tạo biến đổi và $1+\ell$ lần chấm điểm; cộng khởi tạo và kiểm chứng. \\
+\bottomrule
+\end{tabularx}
+\caption{Các thành phần chi phí chính theo cài đặt.}\label{tab:method-costs}
+\end{table}
+
+Với LNS/ALNS, có thể cộng chi phí từng vòng theo
+\begin{equation}
+ \begin{aligned}
+ \mathcal C_{\rm search}={}&\sum_{t=1}^{I}
+ (\mathcal C_{{\rm destroy},t}+\mathcal C_{{\rm repair},t}\\
+ &+\mathcal C_{{\rm local},t}+\mathcal C_{{\rm control},t})
+ +\mathcal C_{\rm interrupted}.
+ \end{aligned}\label{eq:search-cost-sum}
+\end{equation}
+Trong đó phần điều khiển bao gồm chấp nhận, lưu tốt nhất và thích ứng nếu có; $\mathcal C_{\rm interrupted}$ là chi phí đã thực hiện của vòng bị ngắt, bằng $0$ nếu không có vòng này. Số vòng hoàn chỉnh vì vậy không phản ánh mọi công việc đã thực hiện. Khi xét chi phí tổng, còn phải tính tiền xử lý, khởi tạo, xuất và kiểm chứng.
+
+Số phần tử bộ nhớ đệm có giới hạn không đồng nghĩa với một mức dung lượng cố định tính bằng byte. Khóa và giá trị có kích thước khác nhau theo số đơn, số chuyến và độ dài đường đi. Việc cắt bỏ một mục đệm làm tăng khả năng phải tính lại, không thay đổi định nghĩa hàm mục tiêu. Tuy nhiên, trong ngân sách thời gian cố định, tốc độ khác nhau có thể làm thay đổi số vòng hoàn thành và nghiệm cuối. Trong thực nghiệm, thời gian chạy, số lần đánh giá và số vòng được dùng để bổ sung cho phân tích cấu trúc này.
+
+Ba câu hỏi so sánh chính được nối với mục tiêu ở Chương 1: B0--B2 đánh giá hai cách kiến tạo có cả khác biệt định tuyến; so sánh với B2 đánh giá lợi ích của tiếp tục tìm kiếm; LNS--ALNS đối chiếu lựa chọn toán tử, còn VNS đối chiếu một chiến lược biến đổi nghiệm khác. Không dùng độ phức tạp hoặc tên phương pháp để suy ra trước thứ hạng chất lượng nghiệm.
