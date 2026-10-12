@@ -18,7 +18,8 @@ def display_text(value):
     value = re.sub(r"\b(\d+) seed\b", r"\1 lần chạy", value)
     for original, translated in (
         ("Tổng trễ hạn", "Tổng độ trễ"), ("dương = tốt hơn", "số dương là tốt hơn"),
-        ("thấp hơn = tốt hơn", "thấp hơn là tốt hơn"),
+        (" · thấp hơn = tốt hơn", ""), (" · thấp hơn là tốt hơn", ""),
+        (" · số dương là tốt hơn", ""),
         ("Thời gian tối ưu gồm khởi tạo", "Thời gian tối ưu, kể cả khởi tạo"),
         (" · heuristic", ""),
     ):
@@ -40,6 +41,8 @@ def short_caption(family, reference, current, suffix=""):
                 "So sánh trên cùng bài toán sau khi lấy trung bình các lần chạy; số dương là tốt hơn. "
                 "Râu trải từ nhỏ nhất đến lớn nhất giữa các bài toán cùng quy mô, không phải khoảng tin cậy.")
     captions = {
+        "budget": "Cùng đầu vào và seed, thay ngân sách yêu cầu. Điểm là F trung bình; râu là SD giữa seed, không phải CI. Ngân sách khác thời gian thực đo; giữ cả ca 0 vòng và kết quả bất lợi.",
+        "weights": "Cùng đầu vào, seed và ngân sách, thay profile trọng số. So quãng đường và tổng độ trễ; không so F giữa trọng số. Điểm là trung bình, râu là SD giữa seed; các điểm trùng có thể chồng nhau. Đây không phải biên Pareto tối ưu.",
         "quality": f"Mỗi điểm là mức cải thiện F so với {reference} trên cùng bài toán, sau khi lấy trung bình các lần chạy. Mỗi bài toán có trọng số như nhau; số dương là tốt hơn. Không tính tỷ lệ khi F đối chứng bằng 0.",
         "components": f"So sánh quãng đường, thời gian hoàn tất và tổng độ trễ với {reference}. Chấm mờ là từng bài toán; ký hiệu đậm là trung bình; thanh ngang trải từ giá trị nhỏ nhất đến lớn nhất, không phải khoảng tin cậy. n là số bài toán tính được tỷ lệ cho từng chỉ số.",
         "stability": "Mỗi chấm là một lần chạy với seed khác nhau. Hộp thể hiện khoảng Q1–Q3 và trung vị; râu theo quy tắc 1,5 IQR. Biểu đồ mô tả mức dao động giữa các lần chạy, không phải khoảng tin cậy.",

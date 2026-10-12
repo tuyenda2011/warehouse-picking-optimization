@@ -83,11 +83,21 @@ def _report(payload: dict, summary: list[dict], availability: dict) -> str:
               "- raw_metrics.csv: một hàng cho mỗi lần chạy đã xác thực.",
               "- evaluation.json: dữ liệu, phương án, cấu hình đầy đủ và thông tin truy xuất nguồn; có thể chuyển máy và nạp vào demo.",
               "- availability.json: đường dẫn, cách tính từng hình và lý do không xuất.", ""]
+    if any("sensitivity_design" in g["config"] for g in payload["groups"]):
+        lines += ["## Khảo sát độ nhạy bổ sung", "",
+                  "[sensitivity.csv](sensitivity.csv) chứa ngân sách yêu cầu, thời gian thực đo, profile trọng số, "
+                  "trung bình/SD và số lượt 0 vòng của từng input/method/điều kiện. "
+                  "Các điều kiện dùng cùng input và seed, được khóa trước khi giải và chạy tuần tự theo thứ tự xáo cố định. "
+                  "Khảo sát thăm dò trên tối đa ba input mỗi nhóm; không coi seed là input độc lập. "
+                  "Hình 06: F theo ngân sách với trọng số cân bằng. Hình 07: quãng đường–độ trễ, "
+                  "không so F giữa trọng số hoặc khẳng định Pareto tối ưu. Râu là SD, không phải CI.", ""]
     return "\n".join(lines)
 
 
 def _gallery(payload: dict, availability: dict) -> str:
     """A local image catalogue; full method notes are collapsed by default."""
+    primary = [g for g in payload["groups"] if "sensitivity_condition" not in g["config"]]
+    cases = sum(len(g["instances"]) for g in payload["groups"] if "sensitivity_condition" in g["config"])
     lines = ["<!doctype html><html lang='vi'><meta charset='utf-8'>",
              "<meta name='viewport' content='width=device-width, initial-scale=1'>",
              "<title>Hình đánh giá benchmark</title><style>",
@@ -98,8 +108,9 @@ def _gallery(payload: dict, availability: dict) -> str:
              "article img{width:100%;height:220px;object-fit:contain}h3{font-size:17px;margin:10px 0}details{margin-top:12px}summary{cursor:pointer}",
              ".missing{background:#fff8e9;padding:12px;border-radius:4px}.meta{color:#516074}</style>",
              "<h1>Hình đánh giá benchmark</h1>",
-             f"<p class='meta'>{len(payload['groups'])} nhóm dữ liệu · "
-             f"{sum(len(g['instances']) for g in payload['groups'])} bài toán · "
+             f"<p class='meta'>{len(primary)} nhóm dữ liệu · "
+             f"{sum(len(g['instances']) for g in primary)} bài toán chính · "
+             + (f"{cases} ca đầu vào–điều kiện bổ sung · " if cases else "") +
              f"{sum(len(g['results']) for g in payload['groups'])} lượt chạy · Chế độ {escape(payload['preset'])}</p>",
              "<p>Mỗi ảnh PNG chứa một biểu đồ. Bấm <strong>Mở PNG</strong> để xem ảnh đầy đủ và lưu vào báo cáo hoặc slide. "
              "Bảng và ảnh dùng cùng kết quả đã kiểm định.</p>",
@@ -112,6 +123,8 @@ def _gallery(payload: dict, availability: dict) -> str:
         lines.append(f"<h2>{label}</h2>")
         for group in payload["groups"]:
             selected = [entry for entry in entries if entry["group"] == group["name"]]
+            if not selected:
+                continue
             lines += [f"<h3>{escape(group['name'])} · Đối chứng {escape(availability['references'][group['name']])}</h3>",
                       "<div class='grid'>"]
             for entry in selected:
@@ -126,6 +139,10 @@ def _gallery(payload: dict, availability: dict) -> str:
                     lines.append(f"<p class='missing'>Không xuất: {escape(entry['reason'] or 'Chưa đủ dữ liệu.')}</p>")
                 lines.append("</article>")
             lines.append("</div>")
+    if any("sensitivity_design" in g["config"] for g in payload["groups"]):
+        lines.append("<p><a href='sensitivity.csv' download>Dữ liệu độ nhạy CSV</a>: "
+                     "ngân sách yêu cầu, thời gian thực đo, profile và số lượt 0 vòng. "
+                     "Râu là SD, không phải CI; không so F giữa trọng số hoặc khẳng định Pareto tối ưu.</p>")
     lines.append("</html>")
     return "\n".join(lines)
 
@@ -133,7 +150,8 @@ def _gallery(payload: dict, availability: dict) -> str:
 def _figure_filename(spec: dict) -> str:
     family, _, suffix = spec["id"].rsplit("__", 1)[1].partition("_")
     stems = {"quality": "01_chat_luong", "components": "02_thanh_phan",
-             "stability": "03_on_dinh", "convergence": "04_hoi_tu", "scalability": "05_quy_mo"}
+             "stability": "03_on_dinh", "convergence": "04_hoi_tu", "scalability": "05_quy_mo",
+             "budget": "06_do_nhay_ngan_sach", "weights": "07_danh_doi_trong_so"}
     if family == "components":
         return {"distance": "02_quang_duong.png", "makespan": "02_thoi_gian_hoan_tat.png",
                 "tardiness": "02_tong_do_tre.png"}[suffix]
@@ -168,6 +186,8 @@ def export_evaluation(payload: dict, output: str | Path, presentation: bool = Fa
                            if field.endswith(("_improvement_pct", "_difference"))})
     per_instance = list(per_instance_by_key.values())
     raw = tables["B2"]["raw_metrics"]
+    from .sensitivity import condition_rows
+    sensitivity = condition_rows(payload, tables["B2"])
     # Serialize before creating a directory so malformed non-JSON provenance
     # cannot leave a partial export beside otherwise valid solver evidence.
     portable = json.dumps(payload, ensure_ascii=False, allow_nan=False, indent=2) + "\n"
@@ -177,19 +197,25 @@ def export_evaluation(payload: dict, output: str | Path, presentation: bool = Fa
     _write_csv(output / "summary.csv", summary, ["group", "method", "reference"])
     _write_csv(output / "per_instance.csv", per_instance, ["group", "instance", "method"])
     _write_csv(output / "raw_metrics.csv", raw, ["group", "instance", "method", "search_seed"])
+    if sensitivity:
+        _write_csv(output / "sensitivity.csv", sensitivity,
+                   ["parent_group", "instance", "method", "profile", "budget_seconds"])
     (output / "evaluation.json").write_text(portable, encoding="utf-8")
     common_reference = next(iter(set(references.values()))) if len(set(references.values())) == 1 else None
     availability = {"schema_version": 1, "reference": common_reference, "references": references, "charts_requested": charts,
                     "report": [], "presentation": []}
-    from .evaluation_figures import FAMILIES, _figure_specs_from_tables, _slug, _spec, figure_bytes
+    from .evaluation_figures import _figure_specs_from_tables, _slug, _spec, families_for, figure_bytes
     # Reuse the audited tables across groups and styles. Render one group at a
     # time rather than keeping the complete report's figures in memory.
     for index, group in enumerate(payload["groups"], 1):
+        if "sensitivity_condition" in group["config"]:
+            continue
         reference = references[group["name"]]
         directory = f"{index:02d}_{_slug(group['name'])}"
         for style in ("report", "presentation") if presentation else ("report",):
             specs = (_figure_specs_from_tables(payload, tables[reference], reference, group["name"], style)
-                     if charts else [_spec(group, family, reason="Biểu đồ bị tắt; dùng các bảng CSV.") for family in FAMILIES])
+                     if charts else [_spec(group, family, reason="Biểu đồ bị tắt; dùng các bảng CSV.")
+                                     for family in families_for(group)])
             try:
                 for spec in specs:
                     entry = {key: spec[key] for key in ("id", "title", "caption", "reason", "group")}

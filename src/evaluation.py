@@ -15,7 +15,7 @@ from statistics import mean, median, stdev
 
 from .benchmark_archive import METRICS, STOCHASTIC, TIMING_KEYS, _assert_same, verify_benchmark
 from .models import InputError, Instance, read_instance
-from .search import SearchConfig
+from .search import SearchConfig, canonical_search_config
 from .solver import METHODS, fingerprint
 from .units import unit_label
 from .validator import validate_solution
@@ -122,7 +122,7 @@ def validate_evaluation(payload):
                 errors = validate_solution(by_name[n], result)
                 if errors:
                     raise InputError(f"Invalid result {name}/{n}/{method}: {'; '.join(errors)}")
-                _assert_same(_json_value(result["search"]["config"]), options, "Search configuration")
+                _assert_same(canonical_search_config(result["search"]["config"]), options, "Search configuration")
                 for key in TIMING_KEYS:
                     _finite(result["timing"][key], f"timing.{key}")
                 for key in METRICS[:-1]:
@@ -146,6 +146,8 @@ def validate_evaluation(payload):
                              "tardiness_ref": len(instance.orders) * completion,
                              "weights": config.get("weights", [1/3, 1/3, 1/3])}
                 _assert_same(_json_value(result["objective_config"]), _json_value(objective), "Objective configuration")
+        from .sensitivity import validate_conditions
+        validate_conditions(payload)
         return payload
     except InputError:
         raise

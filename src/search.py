@@ -1,5 +1,6 @@
 """ALNS with full-objective insertion and explicit assignment/sequence neighborhoods."""
 import math
+import json
 import random
 import time
 from dataclasses import asdict, dataclass
@@ -29,8 +30,11 @@ class SearchConfig:
     incremental_validation: bool = False
     destroy_operators: tuple[str, ...] = ("random", "related", "late", "batch")
     repair_operators: tuple[str, ...] = ("greedy", "regret2")
+    candidate_policy: str = "uniform"  # guided is opt-in; preserve the legacy RNG path
 
     def validate(self):
+        if self.candidate_policy not in ("uniform", "guided"):
+            raise InputError("candidate_policy must be uniform or guided")
         if type(self.incremental_validation) is not bool:
             raise InputError("incremental_validation must be a boolean")
         for key, allowed in (("destroy_operators", {"random", "related", "late", "batch", "delay_chain"}),
@@ -55,6 +59,11 @@ class SearchConfig:
             if value > 1 or (key == "cooling" and value == 1):
                 raise InputError(f"{key} must be at most 1 (cooling strictly less than 1)")
         return self
+
+
+def canonical_search_config(config):
+    """Validate supplied fields and fill defaults when reading older saved evidence."""
+    return json.loads(json.dumps(asdict(SearchConfig(**config).validate())))
 
 
 def deadline_check(deadline):
@@ -98,7 +107,56 @@ def destroy(ctx, plan, operator, rng, config, mode="2opt"):
     return partial, sorted(removed)
 
 
-def insertion_options(ctx, plan, oid, rng, limit, mode, deadline):
+def guided_action_scores(ctx, plan, oid, actions, mode, deadline):
+    """Cheap ranking proxy; every retained action is still scored by the full objective."""
+    deadline_check(deadline)
+    op, objective = ctx.instance.operations, ctx.objective
+    singleton = ctx.batch_info((oid,), mode)
+    data, picker_ends = [], []
+    for sequence in plan:
+        end, rows = 0., []
+        for batch in sequence:
+            deadline_check(deadline)
+            info = ctx.batch_info(batch, mode)
+            end += info[2]
+            locations = frozenset().union(*(ctx.locations[o] for o in batch))
+            rows.append((batch, end, locations))
+        picker_ends.append(end)
+        data.append(rows)
+    late_suffix = []
+    for rows in data:
+        counts, late = [0] * (len(rows)+1), 0
+        for index in range(len(rows)-1, -1, -1):
+            batch, end, _ = rows[index]
+            late += sum(end > ctx.orders[o].due for o in batch)
+            counts[index] = late
+        late_suffix.append(counts)
+    old_makespan = max(picker_ends)
+    scores = {}
+    for action in actions:
+        deadline_check(deadline)
+        new, picker, index = action
+        rows = data[picker]
+        if new:
+            distance, duration = singleton[1].distance, singleton[2]
+            end = (rows[index-1][1] if index else 0.) + duration
+            tardiness = max(0., end-ctx.orders[oid].due) + duration*late_suffix[picker][index]
+        else:
+            batch, old_end, locations = rows[index]
+            missing = ctx.locations[oid]-locations
+            anchors = locations | {ctx.instance.depot}
+            distance = 2*sum(min(ctx.graph.distance(a,b) for b in anchors) for a in missing)
+            duration = distance/op.speed + op.location_minutes*len(missing) + ctx.pick_times[oid]
+            end = old_end + duration
+            tardiness = max(0., end-ctx.orders[oid].due)
+            tardiness += sum(max(0., end-ctx.orders[o].due)-max(0., old_end-ctx.orders[o].due) for o in batch)
+            tardiness += duration*late_suffix[picker][index+1]
+        makespan = max(old_makespan, picker_ends[picker]+duration)-old_makespan
+        scores[action] = objective.score(distance, makespan, tardiness)
+    return scores
+
+
+def insertion_options(ctx, plan, oid, rng, limit, mode, deadline, policy="uniform"):
     actions, new_actions = [], []
     cap = ctx.instance.operations.capacity
     for picker, sequence in enumerate(plan):
@@ -110,7 +168,13 @@ def insertion_options(ctx, plan, oid, rng, limit, mode, deadline):
     if limit and len(actions) + len(new_actions) > limit:
         mandatory = rng.choice(new_actions)
         others = [action for action in actions + new_actions if action != mandatory]
-        actions = [mandatory, *rng.sample(others, min(limit - 1, len(others)))]
+        if policy == "guided" and limit > 1:
+            scores = guided_action_scores(ctx, plan, oid, others, mode, deadline)
+            guided = sorted(others, key=lambda action: (scores[action], action))[:(limit-1)//2]
+            remaining = [action for action in others if action not in guided]
+            actions = [mandatory, *guided, *rng.sample(remaining, limit-1-len(guided))]
+        else:
+            actions = [mandatory, *rng.sample(others, min(limit - 1, len(others)))]
     else:
         actions += new_actions
     options = []
@@ -133,7 +197,8 @@ def repair(ctx, partial, removed, operator, rng, config, mode, deadline):
         deadline_check(deadline)
         choices = []
         for oid in pending:
-            options = insertion_options(ctx, partial, oid, rng, config.candidate_limit, mode, deadline)
+            options = insertion_options(ctx, partial, oid, rng, config.candidate_limit, mode, deadline,
+                                        policy=config.candidate_policy)
             if operator == "greedy":
                 priority = (options[0][0], oid)
             elif operator == "regret2":

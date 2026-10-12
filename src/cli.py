@@ -26,6 +26,18 @@ def _print_report_files(output, charts, exported=None):
     print(f"Open offline gallery: {output / 'index.html'}")
 
 
+def _print_plan(planned):
+    if planned.get("sensitivity_runs", 0):
+        print(f"Preset {planned['preset']}: {planned['primary_instances']} primary instances + "
+              f"{planned['sensitivity_cases']} sensitivity input-condition cases, "
+              f"{planned['runs']} solver runs", flush=True)
+        print(f"Configured search budgets: {planned['search_budget_seconds'] / 60:.1f} minutes "
+              "(not a measured wall-clock estimate)", flush=True)
+    else:
+        print(f"Preset {planned['preset']}: {planned['instances']} instances, "
+              f"{planned['runs']} solver runs", flush=True)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Warehouse batching + routing + picker scheduling")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -47,6 +59,8 @@ def main(argv=None):
     run.add_argument("--seconds", type=float, default=3.)
     run.add_argument("--iterations", type=int, default=200)
     run.add_argument("--candidate-limit", type=int, default=24)
+    run.add_argument("--candidate-policy", choices=("uniform", "guided"), default="uniform")
+    run.add_argument("--incremental-validation", action="store_true")
     objective = run.add_mutually_exclusive_group()
     objective.add_argument("--weights", type=float, nargs=3, metavar=("DISTANCE", "MAKESPAN", "TARDINESS"))
     objective.add_argument("--profile", choices=list(WEIGHT_PROFILES), default="balanced")
@@ -105,7 +119,9 @@ def main(argv=None):
             write_json(args.output, instance.to_dict())
             print(f"Generated {instance.name}: {len(instance.orders)} orders -> {args.output}")
         elif args.command == "solve":
-            config = SearchConfig(seconds=args.seconds, iterations=args.iterations, candidate_limit=args.candidate_limit)
+            config = SearchConfig(seconds=args.seconds, iterations=args.iterations, candidate_limit=args.candidate_limit,
+                                  candidate_policy=args.candidate_policy,
+                                  incremental_validation=args.incremental_validation)
             weights = args.weights if args.weights is not None else profile_weights(args.profile)
             result = solve(read_instance(args.instance), args.method, args.seed, config, weights)
             write_json(args.output, result)
@@ -133,7 +149,7 @@ def main(argv=None):
                 args.output = str(Path("results") / label)
             if args.dry_run:
                 planned = dry_run(config, args.preset or "quick", args.config, args.groups)
-                print(f"Preset {planned['preset']}: {planned['instances']} instances, {planned['runs']} solver runs")
+                _print_plan(planned)
                 for group in planned["groups"]:
                     print(f"  {group['name']}: {group['instances']} instances, {group['runs']} runs")
                 for skipped in planned["skipped_groups"]:
@@ -141,7 +157,7 @@ def main(argv=None):
                 print(f"Purpose: {planned['purpose']}; no files written and no solvers run")
             elif is_experiment_config(config):
                 planned = dry_run(config, args.preset or "quick", args.config, args.groups)
-                print(f"Preset {planned['preset']}: {planned['instances']} instances, {planned['runs']} solver runs", flush=True)
+                _print_plan(planned)
                 for skipped in planned["skipped_groups"]:
                     print(f"Skipped {skipped['name']}: {skipped['reason']}", flush=True)
                 payload = run_experiment(config, args.output, args.preset or "quick", args.config,

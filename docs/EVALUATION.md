@@ -40,7 +40,7 @@ khi thay số đơn. Horizon sinh hạn có thể thay đổi theo số đơn d�
   đủ điều kiện tính phần trăm để mẫu số không bị che giấu.
 - Win/tie/loss theo F với sai số tuyệt đối 1e-9, không phải kết luận có ý nghĩa thống kê.
 
-## Năm nhóm hình
+## Bảy nhóm hình
 
 1. Chất lượng: cải thiện F so với đối chứng, trung bình seed trước khi so sánh.
 2. Thành phần: quãng đường, thời gian hoàn tất và tổng độ trễ; thể hiện cả đánh đổi.
@@ -51,6 +51,26 @@ khi thay số đơn. Horizon sinh hạn có thể thay đổi theo số đơn d�
    trước khởi tạo hoặc kéo dài trace ngắn như thể đã đo được.
 5. Quy mô: chất lượng và thời gian tính toán theo số đơn trên nhóm dữ liệu có điều
    kiện được kiểm soát. Năm bản đồ demo khác nhau không thay thế thí nghiệm này.
+6. Ngân sách: F cuối cùng theo 0,5/3/6 giây với trọng số cân bằng; cùng input/seed
+   giữa các điều kiện. Điểm là trung bình seed, râu là SD. Trục x là ngân sách yêu
+   cầu; thời gian thực đo và số lượt 0 vòng có trong `sensitivity.csv`.
+7. Trọng số: quãng đường–tổng độ trễ theo profile cân bằng/đường đi/độ trễ,
+   cùng ngân sách 3 giây. Râu ngang/dọc là SD; không so F giữa trọng số và không
+   gọi tập điểm quan sát là biên Pareto tối ưu. Điểm trùng nhau có thể chồng nhau.
+
+Hai nhóm mới cần chạy cấu hình `sensitivity` đã tích hợp vào cùng lệnh benchmark.
+Report chọn trước tối đa ba input mỗi nhóm theo số đơn/tên, năm seed tìm kiếm
+1–5; điều kiện cân bằng 3 giây dùng chung. Các điều kiện/lượt giải bổ sung chạy
+tuần tự theo thứ tự xáo với seed cố định, được khóa nguồn/cấu hình/input cùng
+benchmark chính. Tổng 765 lượt bổ sung cho ba nhóm; không gộp vào 1.440 lượt
+chính khi diễn giải. Đây là khảo sát thăm dò trên tập được chọn, không suy luận
+cho mọi kho; tải máy vẫn có thể ảnh hưởng kết quả theo thời gian.
+Quick dùng hai seed và ngân sách 0,01/0,02/0,03 giây để kiểm tra pipeline.
+Nhóm điều kiện lưu trong `datasets/*_sensitivity_*/`; Streamlit giữ bộ chọn ba
+nhóm chính, đưa hai hình vào mục **Biểu đồ** và cung cấp CSV độ nhạy riêng.
+Gói cũ thiếu thiết kế độ nhạy chỉ xuất năm nhóm hình cũ. Không suy diễn dữ liệu
+trọng số từ trace hoặc chạy âm thầm khi mở báo cáo. Thiết kế chi tiết tại
+[BENCHMARK_SENSITIVITY_DESIGN.md](BENCHMARK_SENSITIVITY_DESIGN.md).
 
 Hình giữ màu, marker và cách tính nhất quán. Cả hai kiểu chỉ xuất PNG 300 dpi,
 mỗi ảnh chứa một biểu đồ. Kiểu report dùng chữ phù hợp tài liệu; kiểu presentation
@@ -90,6 +110,7 @@ src/evaluation_charts/
   stability.py     # Dao động giữa các seed
   convergence.py   # Hội tụ theo thời gian đã ghi
   scalability.py   # Chất lượng và thời gian theo quy mô có kiểm soát
+  sensitivity.py   # Ngân sách yêu cầu và đánh đổi vận hành theo trọng số
   common.py        # Màu, nhãn và các hàm vẽ dùng chung
 ```
 
@@ -107,8 +128,15 @@ Validator phát hiện thiếu/trùng run, seed sai, fingerprint sai, sai mục 
 không hợp lệ và trace không nhất quán. Việc này chứng minh tính nhất quán nội bộ;
 không xác thực danh tính tác giả của file hay đo lại runtime trên máy người xem.
 
-Giao diện có workspace benchmark độc lập với mô phỏng. Đánh giá lần chạy hiện tại
-dùng nghiệm gốc; quy đổi minh họa Kris ở phần mô phỏng không thay dữ liệu benchmark.
+Giao diện có workspace benchmark độc lập với mô phỏng. Bằng chứng đầu vào và nghiệm
+gốc được kiểm định trước khi tạo bảng trình bày. Giao diện luôn áp dụng **đơn vị mô phỏng**
+quy ước Kris cho cả mô phỏng, đánh giá lần chạy và bảng/biểu đồ benchmark: 0,1 m mỗi
+đơn vị khoảng cách nguồn, thời gian suy ra theo vận tốc nguồn để khớp mô phỏng
+60 m/phút. Đây là minh họa chưa hiệu chuẩn vật lý. Không có lựa chọn đổi chế độ đơn vị.
+F, tỷ lệ, số đếm, sức chứa và runtime máy tính không đổi; JSON nguồn vẫn giữ nguyên.
+CSV đã quy đổi và CSV đơn vị gốc có nút tải/tên tệp riêng. Các biểu đồ chỉ số vận hành
+hiển thị trung bình và độ lệch chuẩn giữa seed, không phải khoảng tin cậy. Nguồn
+benchmark và bộ hình do CLI xuất vẫn dùng đơn vị nguồn.
 Chọn **Đánh giá benchmark** trong mục **Chức năng** ở thanh bên, rồi tải gói lên
 hoặc chọn **Báo cáo trên máy**. Dùng **Nhóm dữ liệu** và **Thuật toán đối chứng** để
 lọc kết quả. Tab **Biểu đồ** có mục **Dùng cho** (**Báo cáo** / **Slide**) và

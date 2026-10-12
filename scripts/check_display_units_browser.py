@@ -12,10 +12,11 @@ sys.path.insert(0, str(ROOT))
 
 from playwright.sync_api import expect, sync_playwright
 
+from demo.display import display_snapshot_for_simulation, kris_convention
 from src.demo_snapshot import validate_snapshot
 from src.generator import generate
 from src.models import Order, Product
-from src.units import KRIS_DISPLAY_CONVENTION, display_snapshot, format_duration
+from src.units import format_duration, time_scale_seconds
 from src.validator import validate_solution
 
 
@@ -56,10 +57,17 @@ def numeric_value(text):
     return float(match.group().replace(",", ""))
 
 
+def compact_clock(value, seconds_per_unit):
+    total = max(0, math.floor(value * seconds_per_unit + .5))
+    hours, remainder = divmod(total, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--url", default="http://127.0.0.1:8514")
-    parser.add_argument("--output", default="results/display_units_20261002/browser")
+    parser.add_argument("--url", default="http://127.0.0.1:8518")
+    parser.add_argument("--output", default="tmp/laptop-display-units-20261011")
     parser.add_argument("--kris-only", action="store_true")
     args = parser.parse_args()
     output = ROOT / args.output
@@ -68,10 +76,12 @@ def main():
     records, errors, tiny_midpoints = [], [], []
     with sync_playwright() as p:
         browser = p.chromium.launch(channel="msedge", headless=True)
-        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto(args.url)
         expect(page.locator(".st-key-run").get_by_role("button")).to_be_visible(timeout=45000)
+        expect(page.locator(".st-key-display_unit_mode")).to_have_count(0)
+        expect(page.get_by_role("checkbox", name="Dùng đơn vị mô phỏng", exact=True)).to_have_count(0)
 
         def settled():
             expect(page.get_by_test_id("stStatusWidget")).to_have_count(0, timeout=45000)
@@ -112,7 +122,8 @@ def main():
 
         def simulation():
             page.get_by_role("tab", name="Mô phỏng", exact=True).click()
-            frame = page.frame_locator("iframe")
+            settled()
+            frame = page.frame_locator(".st-key-simulation_canvas iframe")
             expect(frame.locator("#timelineSlider")).to_be_visible(timeout=15000)
             frame.locator("#resetBtn").click()
             return frame
@@ -126,12 +137,12 @@ def main():
         def responsive_screenshots(name, frame):
             page.get_by_test_id("stMetric").nth(1).scroll_into_view_if_needed()
             page.screenshot(path=str(output / f"{name}-desktop.png"), full_page=True)
-            page.locator("iframe").screenshot(path=str(output / f"{name}-desktop-replay.png"))
+            page.locator(".st-key-simulation_canvas iframe").screenshot(path=str(output / f"{name}-desktop-replay.png"))
             page.set_viewport_size({"width": 1366, "height": 768})
             expect(page.locator(".st-key-run").get_by_role("button")).to_be_visible()
             page.get_by_test_id("stMetric").nth(1).scroll_into_view_if_needed()
             page.screenshot(path=str(output / f"{name}-laptop.png"), full_page=True)
-            page.locator("iframe").screenshot(path=str(output / f"{name}-laptop-replay.png"))
+            page.locator(".st-key-simulation_canvas iframe").screenshot(path=str(output / f"{name}-laptop-replay.png"))
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             assert frame.locator("body").evaluate("el => el.scrollWidth <= el.clientWidth")
             metric_layout = page.get_by_test_id("stMetric").nth(1).get_by_test_id("stMetricValue").evaluate(
@@ -141,7 +152,7 @@ def main():
             )
             (output / f"{name}-laptop-layout.json").write_text(json.dumps(metric_layout, ensure_ascii=False, indent=2), encoding="utf-8")
             assert all(row["scroll_width"] <= row["client_width"] for row in metric_layout), (name, metric_layout)
-            page.set_viewport_size({"width": 1440, "height": 1000})
+            page.set_viewport_size({"width": 1440, "height": 900})
             page.wait_for_function("document.querySelector('[data-testid=stSidebar]').getBoundingClientRect().left >= 0")
 
         select("source", "Tải dữ liệu JSON")
@@ -177,7 +188,10 @@ def main():
             badge = frame.locator("#timeBadge").inner_text()
             if physical_text is not None:
                 assert header == physical_text, (name, header, physical_text)
-                assert badge.endswith(physical_text), (name, badge, physical_text)
+                expected_clock = compact_clock(duration, time_scale_seconds(instance))
+                assert badge == f"{expected_clock} / {expected_clock}", (name, badge, expected_clock)
+                assert frame.locator("#timeBadge").get_attribute("title") == (
+                    f"Thời gian vận hành: {physical_text} / {physical_text}")
             else:
                 label = "đơn vị thời gian nguồn" if time_unit == "source_time_unit" else time_unit
                 assert label in header and math.isclose(numeric_value(header), duration)
@@ -226,7 +240,7 @@ def main():
         result = kris["results"]["ALNS"]
         raw = result["metrics"]["makespan"]
         assert kris["instance"]["metadata"]["units"]["time"] == "source_time_unit"
-        view = display_snapshot(kris, KRIS_DISPLAY_CONVENTION)
+        view = display_snapshot_for_simulation(kris)
         from src.models import Instance
         display_instance = Instance.from_dict(view['instance'])
         converted = view['results']['ALNS']['metrics']
@@ -235,14 +249,18 @@ def main():
         assert header == expected_duration, (header, expected_duration)
         distance = page.get_by_test_id('stMetric').nth(2).get_by_test_id('stMetricValue').inner_text()
         assert distance == f"{converted['distance']:,.1f} m"
-        expect(page.get_by_text('Quy ước demo Kris:', exact=False)).to_be_visible()
+        expect(page.get_by_text('Kris dùng quy ước đơn vị mô phỏng', exact=False)).to_be_visible()
         expect(page.get_by_test_id('stMetricDelta')).to_have_count(0)
         frame = simulation()
         maximum = float(frame.locator("#timelineSlider").get_attribute("max"))
-        assert math.isclose(maximum, raw / 1800)
+        convention = kris_convention(kris["instance"])
+        assert math.isclose(maximum, raw * convention["seconds_per_source_time"] / 60)
         seek(frame, maximum)
         badge = frame.locator("#timeBadge").inner_text()
-        assert badge.endswith(expected_duration)
+        expected_clock = compact_clock(converted["makespan"], 60)
+        assert badge == f"{expected_clock} / {expected_clock}", (badge, expected_clock)
+        assert frame.locator("#timeBadge").get_attribute("title") == (
+            f"Thời gian vận hành: {expected_duration} / {expected_duration}")
         assert 'đơn vị thời gian nguồn' not in badge
         payload = frame.locator('#timelineSlider').evaluate('() => simData')
         assert payload['time_scale_seconds'] == 60
@@ -250,7 +268,10 @@ def main():
         responsive_screenshots("kris", frame)
         records.append({"case": "actual_kris", "raw_makespan": raw, "header": header,
                         "distance": distance, "badge_at_end": badge, "slider_max": maximum,
-                        "convention": KRIS_DISPLAY_CONVENTION})
+                        "convention": convention})
+        expect(page.locator(".st-key-display_unit_mode")).to_have_count(0)
+        assert snapshot("kris-fixed-simulation-view") == kris
+        records[-1]["raw_snapshot_unchanged"] = True
         assert not errors, errors
         browser.close()
     report = {"checks": records, "page_errors": errors, "python": sys.executable}

@@ -48,7 +48,7 @@ def build_figures(group: dict, runs: dict, style: str) -> list[dict]:
             methods = list(eligible)
             axis.set_xticks(range(len(methods)), [f"{m}\n{len(eligible[m])} seed" for m in methods], rotation=20 if len(methods) > 3 else 0)
             axis.set_title(labels[name], fontsize=18 if style == "presentation" else 12)
-            axis.set_ylabel("F cuối cùng · thấp hơn = tốt hơn")
+            axis.set_ylabel("F cuối cùng")
             _clean_axis(axis, "y")
         fig.suptitle(f"Độ ổn định giữa các seed · {GROUP_LABELS.get(group['name'], group['name'])}", weight="bold")
         suffix = f"_example{selected.index(subset[0][0]) + 1}"

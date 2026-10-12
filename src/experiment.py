@@ -14,7 +14,8 @@ from uuid import uuid4
 
 from .benchmark import STOCHASTIC, benchmark
 from .generator import MAP_SCENARIOS, generate, generate_scenario
-from .models import InputError, read_instance, write_json
+from .models import InputError, Instance, read_instance, write_json
+from .provenance import python_source_hashes
 from .search import SearchConfig
 from .solver import METHODS, fingerprint
 
@@ -35,9 +36,7 @@ def _file_hash(path):
 
 
 def _source_hashes():
-    source_root = Path(__file__).parent
-    return {p.relative_to(source_root).as_posix(): _file_hash(p)
-            for p in sorted(source_root.rglob("*.py"))}
+    return python_source_hashes(Path(__file__).parent)
 
 
 def _tree_hashes(path):
@@ -72,6 +71,14 @@ def _integers(values, label, positive=False):
 
 
 def _datasets(config):
+    if "inline_instances" in config:
+        if (not isinstance(config["inline_instances"], list) or not config["inline_instances"]
+                or config.get("instances") or config.get("scenarios")):
+            raise InputError("inline_instances must be a nonempty exclusive input inventory")
+        datasets = [Instance.from_dict(data) for data in config["inline_instances"]]
+        if len({i.name.casefold() for i in datasets}) != len(datasets):
+            raise InputError("Benchmark instance names must be unique (case-insensitive)")
+        return datasets
     if config.get("instances") and config.get("scenarios"):
         raise InputError("Benchmark cannot combine instances and scenarios")
     if "instances" in config:
@@ -222,11 +229,24 @@ def resolve_experiment(config, preset="quick", config_path=None, groups=None):
                          "instance_sha256": {i.name: fingerprint(i) for i in datasets}})
     if not resolved:
         raise InputError("No experiment groups are available")
+    primary_instances = sum(g["instances"] for g in resolved)
+    extra = []
+    if "sensitivity" in config:
+        from .sensitivity import expand_conditions
+        extra = expand_conditions(resolved, config["sensitivity"], preset, _datasets)
+        resolved.extend(extra)
     return {"schema_version": 1, "kind": EXPERIMENT_KIND, "preset": preset,
             "purpose": "pipeline/demo evidence only" if preset == "quick" else "report experiment",
             "groups": resolved, "skipped_groups": skipped, "input_sha256": input_hashes,
             "request_sha256": _digest(config), "instances": sum(g["instances"] for g in resolved),
-            "runs": sum(g["runs"] for g in resolved)}
+            "runs": sum(g["runs"] for g in resolved),
+            "primary_instances": primary_instances,
+            "sensitivity_cases": sum(g["instances"] for g in extra),
+            "sensitivity_runs": sum(g["runs"] for g in extra),
+            "search_budget_seconds": sum(g["instances"] * len(g["config"]["search_seeds"])
+                                         * sum(m in STOCHASTIC for m in g["config"]["methods"])
+                                         * g["config"].get("search", {}).get("seconds", 3.)
+                                         for g in resolved)}
 
 
 def dry_run(config, preset="quick", config_path=None, groups=None):

@@ -36,15 +36,21 @@ def prepared(draft, content):
 
 # Keep draft controls and result filters when another workspace hides their widgets.
 for control in ("source", "scenario", "orders", "pickers", "capacity", "tightness", "seed", "budget",
-                "objective_profile", "comparison", "kris_file", "result_method", "route_picker", "route_batch",
-                "late_only", "objective_reference"):
+                "objective_profile", "candidate_policy", "incremental_validation", "comparison", "kris_file", "result_method", "route_picker", "route_batch",
+                "late_only", "objective_reference", "result_tabs", "advanced_options",
+                "evaluation_local", "evaluation_group",
+                "evaluation_reference", "evaluation_style", "evaluation_figure", "benchmark_tabs"):
     if control in st.session_state:
         st.session_state[control] = st.session_state[control]
 workspace = st.sidebar.radio("Chức năng", [SIMULATION, BENCHMARK], key="workspace", horizontal=True)
 if workspace == BENCHMARK:
+    st.session_state["instance_upload_widget_populated"] = False
+    st.session_state["instance_upload_widget_hidden"] = True
     benchmark_workspace(ROOT)
     st.stop()
 
+st.session_state["benchmark_upload_widget_populated"] = False
+st.session_state["benchmark_upload_widget_hidden"] = True
 draft, content = sidebar(ROOT, begin)
 st.title("Tối ưu lấy hàng")
 

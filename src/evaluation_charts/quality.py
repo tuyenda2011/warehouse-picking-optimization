@@ -32,7 +32,7 @@ def build_figures(group: dict, rows: list[dict], reference: str, style: str) -> 
         axis.axvline(0, color="#64748b", linewidth=1)
         axis.set_yticks(range(len(selected)), [labels[name] for name in selected])
         axis.set_ylim(len(selected) - .5, -.5)
-        axis.set_xlabel(f"Cải thiện F so với {reference} (%) · dương = tốt hơn")
+        axis.set_xlabel(f"Cải thiện F so với {reference} (%)")
         axis.set_ylabel("Bản đồ" if group["name"] == "maps" else "Bộ dữ liệu")
         _clean_axis(axis)
         _legend(axis, methods, 15 if style == "presentation" else 9)

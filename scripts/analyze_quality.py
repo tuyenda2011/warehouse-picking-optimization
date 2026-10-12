@@ -335,7 +335,7 @@ def verify_diagnostics(study_root, output):
     _assert_same(locked["source_sha256"], study_locked["source_sha256"], "Diagnostics historical source")
     options = locked["options"]
     verified = verify_benchmark(study_root / "holdout")
-    expected_source = {Path(name).name: checksum for name, checksum in study_locked["source_sha256"].items()
+    expected_source = {name.removeprefix("src/"): checksum for name, checksum in study_locked["source_sha256"].items()
                        if name.startswith("src/")}
     _assert_same(verified["manifest"]["source_sha256"], expected_source, "Diagnostics benchmark historical source")
     declared_instances = [read_instance(study_root / entry["file"]) for entry in study_locked["datasets"]["holdout"]]

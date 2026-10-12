@@ -4,6 +4,12 @@
 
 Dự án có bộ giải Python, giao diện mô phỏng Streamlit và benchmark dùng chung cho phần đánh giá trên demo, slide thuyết trình và báo cáo. Kết quả benchmark được lưu để xuất lại bảng, hình hoặc mở trên máy khác.
 
+Đợt cải tiến có đối chứng riêng tại `results/high_score_upgrade_20261010`:
+456 lượt phát triển, chọn cấu hình trước 36 bài holdout mới. Nguồn cũ và nguồn
+mới được lưu riêng; benchmark lịch sử không bị ghi đè. Xem
+[nhật ký nghiên cứu](docs/UPGRADE_RESEARCH_LOG.md) và [hướng dẫn báo cáo](report/README.md).
+Lựa chọn guided là opt-in; mặc định uniform giữ hành vi cũ.
+
 **Python từ 3.10** · **Streamlit** · **B0, B2, LNS, ALNS, VNS**
 
 ## 1. Cài đặt và mở demo
@@ -46,8 +52,9 @@ Mục **Chức năng** ở thanh bên có hai lựa chọn: **Mô phỏng** và 
 
 1. Chọn **Dữ liệu mô phỏng**, **Bộ dữ liệu Kris** hoặc **Tải dữ liệu JSON**.
 2. Với dữ liệu mô phỏng, chọn bản đồ, số đơn, số nhân viên và sức chứa mỗi chuyến.
-3. Trong **Nâng cao**, điều chỉnh seed, thời gian tìm kiếm và tiêu chí ưu tiên. Bật **So sánh cả 5 thuật toán** nếu muốn so sánh B0, B2, LNS, ALNS và VNS; mặc định chạy B0 và ALNS.
-4. Bấm **Chạy tối ưu** để xem kết quả.
+3. Bật **So sánh 5 thuật toán: B0, B2, LNS, ALNS, VNS** ngay trên nút chạy nếu muốn chạy đủ năm phương pháp; phần trợ giúp giải thích từng thuật toán. Mặc định chạy B0 và ALNS.
+4. Trong **Nâng cao**, điều chỉnh seed, thời gian tìm kiếm và tiêu chí ưu tiên nếu cần. Có thể chọn vị trí chèn **Có hướng dẫn** và **Tăng tốc kiểm tra ứng viên**.
+5. Bấm **Chạy tối ưu** để xem kết quả.
 
 | Tab kết quả | Nội dung |
 |---|---|
@@ -58,6 +65,20 @@ Mục **Chức năng** ở thanh bên có hai lựa chọn: **Mô phỏng** và 
 | Đánh giá | So sánh thuật toán trên dữ liệu của lần chạy hiện tại, xem hội tụ và tải bảng/hình. |
 
 Khi đổi cấu hình, bấm chạy lại để áp dụng. Tab **Đánh giá** ở đây phản ánh một lần chạy minh họa; kết quả thực nghiệm nhiều bài toán và seed nằm ở mục **Đánh giá benchmark**.
+
+Giao diện được bố trí cho laptop 1366×768 và 1440×900. Nút chạy nằm trước **Nâng cao**;
+tab chỉ dựng nội dung khi mở và giữ bộ lọc khi chuyển góc xem. Đổi tab
+không chạy lại thuật toán. Ở tốc độ phát 1×, mô phỏng phát toàn bộ lịch trong
+khoảng 30 giây; đồng hồ trên bản đồ là thời gian vận hành của phương án.
+Tệp JSON đã mở được giữ trong phiên khi đổi chức năng; tên tệp và nút **Đóng tệp**
+hiện khi quay lại. Remove hoặc Đóng tệp xóa dữ liệu đã tải khỏi phiên.
+
+Giao diện luôn dùng **đơn vị mô phỏng** để quy đổi Kris nhất quán trên KPI, bản đồ, lịch,
+bảng và biểu đồ: 10 đơn vị khoảng cách nguồn = 1 m; hệ số thời gian suy ra từ
+vận tốc nguồn để tương ứng 60 m/phút như mô phỏng. Đây là quy ước minh họa chưa
+hiệu chuẩn thực tế. Không cần chọn chế độ đơn vị. F, tỷ lệ cải thiện, số đơn trễ,
+sức chứa và thời gian máy tính chạy thuật toán giữ nguyên. JSON luôn là dữ liệu
+gốc; bảng đã quy đổi có hai nút tải CSV phân biệt đơn vị mô phỏng và đơn vị gốc.
 
 ### Đánh giá benchmark
 
@@ -88,7 +109,7 @@ Năm bản đồ có điều kiện khác nhau nên không dùng riêng nhóm `m
 python -m src benchmark --config configs/benchmark.json --preset quick --groups maps scalability --output results/benchmark_quick_01 --presentation
 ```
 
-Với cấu hình hiện tại, lệnh này chạy **7 bài toán, 56 lượt giải**. Mỗi thuật toán tìm kiếm dùng 2 seed, tối đa 0,15 giây hoặc 30 vòng. Quick dùng để kiểm tra luồng chạy, bảng và hình trước khi chạy đầy đủ.
+Với cấu hình hiện tại, lệnh này chạy **7 bài toán chính, 56 lượt giải chính và 200 lượt khảo sát bổ sung**, tổng 256 lượt. Mỗi thuật toán tìm kiếm dùng 2 seed, tối đa 0,15 giây hoặc 30 vòng ở phần chính. Khảo sát quick dùng ngân sách 0,01/0,02/0,03 giây và cùng 2 seed. Quick dùng để kiểm tra luồng chạy, bảng và hình trước khi chạy đầy đủ.
 
 ### Chạy đầy đủ cho báo cáo và slide
 
@@ -96,7 +117,7 @@ Với cấu hình hiện tại, lệnh này chạy **7 bài toán, 56 lượt gi
 python -m src benchmark --config configs/benchmark.json --preset report --groups maps scalability kris --output results/benchmark_report_02 --presentation
 ```
 
-Với cấu hình hiện tại, Report chạy **45 bài toán, 1.440 lượt giải**:
+Với cấu hình hiện tại, Report chạy **45 bài toán chính, 1.440 lượt giải chính và 765 lượt khảo sát bổ sung**, tổng **2.205 lượt**:
 
 | Nhóm | Số bài toán | Số lượt giải |
 |---|---:|---:|
@@ -105,6 +126,8 @@ Với cấu hình hiện tại, Report chạy **45 bài toán, 1.440 lượt gi�
 | `kris` | 18 | 576 |
 
 Mỗi thuật toán tìm kiếm dùng 10 seed, tối đa 3 giây hoặc 100.000 vòng. Ngân sách này áp dụng riêng cho từng lượt, gồm khởi tạo và tìm kiếm. Thời gian toàn đợt còn có tiền xử lý, kiểm định và xuất hình; một bước đang xử lý có thể khiến lượt chạy vượt ngân sách.
+
+Hai khảo sát bổ sung tự chạy bằng cùng lệnh: **ngân sách 0,5/3/6 giây** với trọng số cân bằng và **trọng số cân bằng/đường đi/độ trễ** tại 3 giây. Mỗi nhóm chọn trước tối đa ba input theo số đơn/tên; dùng cùng 5 seed giữa các điều kiện. Điều kiện cân bằng 3 giây dùng chung cho hai khảo sát. Tổng ngân sách tìm kiếm cấu hình khoảng 102,4 phút; đây không phải dự báo thời gian thực tế. Khảo sát có tính thăm dò, không thay thế benchmark chính. Cấu hình ở `sensitivity` trong JSON; đặt `enabled: false` để chủ động bỏ cả hai.
 
 Nhóm `kris` cần [catalog](data/processed/kris_small/catalog.json) và các JSON được liệt kê trong đó. Nếu thiếu dữ liệu, chuẩn bị theo [hướng dẫn dữ liệu](data/README.md), hoặc chạy riêng `--groups maps scalability`. Khi đã chọn rõ `kris`, thiếu dữ liệu sẽ được báo trước khi giải.
 
@@ -162,13 +185,15 @@ results/benchmark_report_02/
 ├── datasets/
 │   ├── maps/
 │   ├── scalability/
-│   └── kris/
+│   ├── kris/
+│   └── *_sensitivity_*/
 └── report/
     ├── index.html
     ├── REPORT.md
     ├── summary.csv
     ├── per_instance.csv
     ├── raw_metrics.csv
+    ├── sensitivity.csv
     ├── evaluation.json
     ├── availability.json
     ├── figures_report/
@@ -188,6 +213,7 @@ Ví dụ trên chọn đủ ba nhóm và bật `--presentation`. Mở **`report/
 | Bảng tổng hợp so sánh thuật toán và đối chứng B0/B2 | `summary.csv` |
 | Trung bình và độ lệch chuẩn theo từng bài toán, thuật toán | `per_instance.csv` |
 | Chỉ tiêu của từng lượt giải | `raw_metrics.csv` |
+| Ngân sách, trọng số, thời gian thực đo và thống kê seed cho hai khảo sát | `sensitivity.csv` |
 | Ảnh chèn vào báo cáo | `figures_report/` |
 | Ảnh chèn vào slide | `figures_presentation/` |
 | Gói tải lên demo | `evaluation.json` |
@@ -195,7 +221,7 @@ Ví dụ trên chọn đủ ba nhóm và bật `--presentation`. Mở **`report/
 
 **Ảnh xuất ra chỉ có PNG, 300 dpi, mỗi ảnh một biểu đồ.** Bộ slide dùng khung 16:9; lệnh không tạo tệp PowerPoint. Cả hai bộ dùng cùng số liệu và màu thuật toán.
 
-Có năm nhóm hình: **chất lượng F**, **các chỉ số thành phần**, **độ ổn định**, **hội tụ** và **ảnh hưởng của quy mô**. Một nhóm có thể tạo nhiều ảnh: ba chỉ số thành phần được tách riêng, hình chất lượng chia trang và các bài toán minh họa có hình riêng. Nếu thiếu dữ liệu hoặc điều kiện thí nghiệm chưa phù hợp, lý do nằm trong danh mục và `availability.json`.
+Có bảy nhóm hình khi chạy cấu hình mới: **chất lượng F**, **các chỉ số thành phần**, **độ ổn định**, **hội tụ**, **ảnh hưởng của quy mô**, **độ nhạy ngân sách** (`06_do_nhay_ngan_sach_vi_du_*.png`) và **đánh đổi theo trọng số** (`07_danh_doi_trong_so_vi_du_*.png`). Hai nhóm mới xuất riêng cho từng input được chọn, trong thư mục nhóm chính; râu là SD giữa seed. Hình trọng số so quãng đường–tổng trễ, không so F khác trọng số hoặc khẳng định biên Pareto tối ưu. Một nhóm có thể tạo nhiều ảnh. Nếu thiếu dữ liệu hoặc điều kiện thí nghiệm chưa phù hợp, lý do nằm trong danh mục và `availability.json`. Kết quả cũ không có các điều kiện bổ sung vẫn mở/xuất được bộ hình cũ; chỉ đổi kiểu vẽ không tạo được dữ liệu độ nhạy mới.
 
 Các bảng lấy trung bình qua seed trên từng bài toán trước khi tổng hợp theo nhóm. Độ lệch chuẩn mô tả dao động, không thay cho kiểm định ý nghĩa thống kê. Chi tiết cách tính và điều kiện vẽ hình nằm trong [docs/EVALUATION.md](docs/EVALUATION.md).
 
@@ -219,6 +245,12 @@ Chọn tiêu chí ưu tiên bằng `--profile`:
 | `tardiness` | Tổng độ trễ | 0,2 · 0,2 · 0,6 |
 
 Có thể dùng `--weights 0.5 0.3 0.2` thay cho `--profile`. Ba trọng số phải dương, hữu hạn và có tổng bằng 1. Lệnh `solve` mặc định giới hạn 200 vòng; truyền `--iterations` nếu muốn dùng ngân sách thời gian dài hơn.
+
+Thử biến thể mới bằng `--candidate-policy guided --incremental-validation`.
+Để kiểm tra tính tái lập theo số vòng, dùng `--seconds 0 --iterations 200`
+và cùng seed/input/config. Với ngân sách giây, tải máy có thể làm số vòng và
+nghiệm khác dù seed giống nhau. Guided chỉ xếp hạng ứng viên; không bảo đảm
+thắng uniform hoặc VNS trên mọi bài.
 
 Với dữ liệu nhỏ, dùng bộ giải exact:
 
@@ -266,6 +298,7 @@ demo/
   simulation.py           # Mô phỏng động
   state.py                # Chuẩn bị dữ liệu và quản lý lần chạy
   evaluation.py           # Đánh giá lần chạy và mở benchmark
+  display.py              # Quy đổi lớp trình bày, kiểm định bằng chứng nguồn trước
 src/
   cli.py                  # Các lệnh generate, solve, validate, exact, benchmark, report
   generator.py            # Sinh dữ liệu và năm kịch bản kho
@@ -308,6 +341,7 @@ Các kiểm thử bao phủ thuật toán, ràng buộc nghiệm, dữ liệu, b
 - [Mô hình và cách diễn giải kết quả](docs/MODEL_AND_DEFENSE.md)
 - [Thuật toán, bất biến và bộ giải exact](docs/ALGORITHM_NOTES.md)
 - [Quy tắc benchmark và đánh giá](docs/EVALUATION.md)
+- [Thiết kế giao diện laptop và quy ước Kris](docs/STREAMLIT_LAPTOP_PLAN_2026-10-11.md)
 - [Định dạng dữ liệu JSON](docs/SCHEMA.md)
 - [Nguồn dữ liệu Kris và giới hạn sử dụng](data/README.md)
 

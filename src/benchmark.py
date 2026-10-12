@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import platform
+import re
+import random
 import stat
 import statistics
 import time
@@ -12,11 +14,22 @@ from pathlib import Path
 
 from .comparison import paired_comparisons
 from .generator import MAP_SCENARIOS, generate, generate_scenario
-from .models import InputError, read_instance, write_json
+from .models import InputError, Instance, read_instance, write_json
+from .provenance import python_source_hashes
 from .search import SearchConfig
 from .solver import METHODS, fingerprint, solve
 
 STOCHASTIC = {"B3", "LNS", "ALNS", "VNS", "ALNS_NO_SCHEDULE", "ALNS_NO_2OPT"}
+
+
+def _instance_stem(name):
+    """Keep ordinary legacy names; encode display names unsafe on Windows/POSIX."""
+    reserved = {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+    reserved |= {f"{prefix}{i}" for prefix in ("COM", "LPT") for i in range(1, 10)}
+    if (re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", name)
+            and not name.endswith(".") and name.split(".")[0].upper() not in reserved):
+        return name
+    return "case-" + hashlib.sha256(name.encode("utf-8")).hexdigest()[:24]
 
 
 def _file_identity(info):
@@ -75,16 +88,21 @@ def benchmark(config, output, progress=None):
     if any(not values or len(values) != len(set(values)) for values in (sizes, instance_seeds, search_seeds)):
         raise InputError("Sizes and seed lists must be nonempty and unique")
     options = SearchConfig(**config.get("search", {})).validate()
+    if "run_order_seed" in config and type(config["run_order_seed"]) is not int:
+        raise InputError("run_order_seed must be an integer")
     started = time.perf_counter()
     rows, runs = [], []
-    source_root = Path(__file__).parent
-    source_hashes = {p.relative_to(source_root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-                     for p in sorted(source_root.rglob("*.py"))}
+    source_hashes = python_source_hashes(Path(__file__).parent)
     instance_paths = config.get("instances", [])
     scenario_keys = config.get("scenarios", [])
     if instance_paths and scenario_keys:
         raise InputError("Benchmark cannot combine instances and scenarios")
-    if instance_paths:
+    if "inline_instances" in config:
+        if (not isinstance(config["inline_instances"], list) or not config["inline_instances"]
+                or instance_paths or scenario_keys):
+            raise InputError("inline_instances must be a nonempty exclusive input inventory")
+        datasets = [(Instance.from_dict(data), None) for data in config["inline_instances"]]
+    elif instance_paths:
         datasets = [(read_instance(path), None) for path in instance_paths]
     elif scenario_keys:
         if not isinstance(scenario_keys, list) or not scenario_keys:
@@ -108,39 +126,54 @@ def benchmark(config, output, progress=None):
     names = [instance.name.casefold() for instance, _ in datasets]
     if len(names) != len(set(names)):
         raise InputError("Benchmark instance names must be unique (case-insensitive) to avoid overwriting results")
+    stems = {instance.name: _instance_stem(instance.name) for instance, _ in datasets}
+    if len({value.casefold() for value in stems.values()}) != len(stems):
+        raise InputError("Benchmark instance names must produce unique filenames")
+    instance_files = {name: f"instances/{stem}.json" for name, stem in stems.items()}
     write_json(output / "config.json", config)
     # Seal input identities before evaluating any method on them.
     write_json(output / "preregistered.json", {
-        "config": config, "source_sha256": source_hashes,
+        "config": config, "source_sha256": source_hashes, "source_inventory_version": 2,
         "instances": {instance.name: fingerprint(instance) for instance, _ in datasets}})
     (output / "raw").mkdir()
     (output / "instances").mkdir()
     guard = _OutputGuard(output)
     saved_files = []
     for instance, instance_seed in datasets:
-            n = len(instance.orders)
-            guard.check()
-            instance_path = output / "instances" / f"{instance.name}.json"
-            _write_evidence_json(instance_path, instance.to_dict())
-            instance_seal = _seal_file(instance_path)
-            saved_files.append(instance_seal)
-            for method in methods:
-                for seed in search_seeds if method in STOCHASTIC else [search_seeds[0]]:
-                    guard.check(instance_seal)
-                    result = solve(instance, method, seed, options, tuple(config.get("weights", [1/3, 1/3, 1/3])))
-                    guard.check(instance_seal)
-                    file_name = f"{instance.name}-{method}-seed{seed}.json"
-                    result_path = output / "raw" / file_name
-                    _write_evidence_json(result_path, result)
-                    result_seal = _seal_file(result_path)
-                    saved_files.append(result_seal)
-                    row = {"instance": instance.name, "n": n, "instance_seed": instance_seed, "method": method, "search_seed": seed, "feasible": result["feasible"], **result["metrics"], **result["timing"],
-                           **{key: result["search"][key] for key in ("iterations_completed", "stop_reason", "adaptation_updates", "adapted_iterations", "search_executed", "budget_scope")}}
-                    rows.append(row)
-                    runs.append({"file": f"raw/{file_name}", "instance_sha256": result["instance_sha256"]})
-                    if progress:
-                        progress(row)
-                    guard.check(instance_seal, result_seal)
+        guard.check()
+        instance_path = output / instance_files[instance.name]
+        if instance_path.resolve().parent != (output / "instances").resolve():
+            raise InputError("Benchmark instance path escapes its output directory")
+        _write_evidence_json(instance_path, instance.to_dict())
+        saved_files.append(_seal_file(instance_path))
+    input_seals = {seal[0].stem: seal for seal in saved_files}
+    tasks = [(instance, instance_seed, method, seed)
+             for instance, instance_seed in datasets for method in methods
+             for seed in (search_seeds if method in STOCHASTIC else search_seeds[:1])]
+    if "run_order_seed" in config:
+        random.Random(config["run_order_seed"]).shuffle(tasks)
+    for instance, instance_seed, method, seed in tasks:
+        instance_seal = input_seals[stems[instance.name]]
+        guard.check(instance_seal)
+        result = solve(instance, method, seed, options, tuple(config.get("weights", [1/3, 1/3, 1/3])))
+        guard.check(instance_seal)
+        file_name = f"{stems[instance.name]}-{method}-seed{seed}.json"
+        result_path = output / "raw" / file_name
+        if result_path.resolve().parent != (output / "raw").resolve():
+            raise InputError("Benchmark result path escapes its output directory")
+        _write_evidence_json(result_path, result)
+        result_seal = _seal_file(result_path)
+        saved_files.append(result_seal)
+        row = {"instance": instance.name, "n": len(instance.orders), "instance_seed": instance_seed,
+               "method": method, "search_seed": seed, "feasible": result["feasible"],
+               **result["metrics"], **result["timing"],
+               **{key: result["search"][key] for key in ("iterations_completed", "stop_reason",
+                  "adaptation_updates", "adapted_iterations", "search_executed", "budget_scope")}}
+        rows.append(row)
+        runs.append({"file": f"raw/{file_name}", "instance_sha256": result["instance_sha256"]})
+        if progress:
+            progress(row)
+        guard.check(instance_seal, result_seal)
     # The complete inventory is checked only at completion, keeping run guards linear.
     guard.check(*saved_files)
     with (output / "runs.csv").open("x", newline="", encoding="utf-8") as file:
@@ -175,7 +208,10 @@ def benchmark(config, output, progress=None):
     guard.check()
     _write_evidence_json(output / "comparison.json", comparisons)
     guard.check()
-    _write_evidence_json(output / "manifest.json", {"config": config, "source_sha256": source_hashes, "python": platform.python_version(), "platform": platform.platform(), "cpu": platform.processor(), "elapsed_seconds": time.perf_counter() - started, "runs": runs})
+    _write_evidence_json(output / "manifest.json", {"config": config, "source_sha256": source_hashes,
+        "source_inventory_version": 2, "instance_files": instance_files,
+        "python": platform.python_version(), "platform": platform.platform(), "cpu": platform.processor(),
+        "elapsed_seconds": time.perf_counter() - started, "runs": runs})
     lines = ["# Kết quả benchmark", "", "Dữ liệu tổng hợp; kết quả đo từ các lần chạy trong thư mục raw. Mỗi hàng tổng hợp seed trên cùng một instance, không coi seed là các instance độc lập.", "", "| Instance | Method | Runs | F mean ± std | Distance mean (m) | Makespan mean (min) | Tardiness mean (min) | Late mean | On-time rate | Total mean (s) | ΔF vs B0 (%) |", "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     if config.get("instances"):
         lines[2] = "Dữ liệu từ file cấu hình; giữ đơn vị nguồn và mục tiêu hạn mềm của project. Không so với best-known của bài toán gốc. Tổng hợp seed trong từng instance."

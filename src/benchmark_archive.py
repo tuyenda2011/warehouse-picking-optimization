@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .comparison import paired_comparisons
 from .models import InputError, read_instance
-from .search import SearchConfig
+from .search import SearchConfig, canonical_search_config
 from .solver import fingerprint
 from .validator import validate_solution
 
@@ -131,12 +131,17 @@ def verify_benchmark(root: Path):
     if not isinstance(records, list) or not records:
         raise InputError("manifest.json has no runs")
 
-    instances = {}
+    instances, instance_files = {}, {}
     for path in sorted((root / "instances").glob("*.json")):
         instance = read_instance(path)
+        if instance.name in instances:
+            raise InputError("Duplicate archived instance name")
         instances[instance.name] = instance
+        instance_files[instance.name] = path.relative_to(root).as_posix()
     if not instances:
         raise InputError("Benchmark has no instances")
+    if "instance_files" in manifest:
+        _assert_same(manifest["instance_files"], instance_files, "instance file inventory")
 
     results = []
     identities = set()
@@ -184,8 +189,8 @@ def verify_benchmark(root: Path):
                               "completion_ref": completion, "tardiness_ref": len(instance.orders) * completion,
                               "weights": config.get("weights", [1/3, 1/3, 1/3])}
         _assert_same(result["objective_config"], expected_objective, "objective configuration")
-        search_config = json.loads(json.dumps(SearchConfig(**config.get("search", {})).__dict__))
-        _assert_same(result["search"]["config"], search_config, "search configuration")
+        search_config = canonical_search_config(config.get("search", {}))
+        _assert_same(canonical_search_config(result["search"]["config"]), search_config, "search configuration")
 
     with (root / "runs.csv").open(encoding="utf-8", newline="") as stream:
         csv_rows = list(csv.DictReader(stream))

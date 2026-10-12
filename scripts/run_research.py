@@ -23,6 +23,7 @@ from src.exact import solve_exact
 from src.generator import generate
 from src.heuristics import fcfs, greedy, list_schedule
 from src.models import InputError, read_instance, write_json
+from src.provenance import python_source_hashes
 from src.search import SearchConfig
 from src.solver import fingerprint, solve
 from src.validator import validate_solution
@@ -37,9 +38,10 @@ def digest(path):
 
 
 def source_hashes():
-    files = [*sorted((ROOT / "src").glob("*.py")), Path(__file__).resolve(),
+    files = [Path(__file__).resolve(),
              ROOT / "scripts" / "build_comparison_report.py", ROOT / "scripts" / "analyze_quality.py"]
-    return {str(p.relative_to(ROOT)).replace("\\", "/"): digest(p) for p in files}
+    return {**{f"src/{key}": value for key, value in python_source_hashes(ROOT / "src").items()},
+            **{p.relative_to(ROOT).as_posix(): digest(p) for p in files}}
 
 
 def seal(path, data):
@@ -81,7 +83,8 @@ def prepare(protocol, output):
         write_json(path, instance.to_dict())
         datasets["exact"].append({"file": path.relative_to(output).as_posix(), "sha256": fingerprint(instance)})
     seal(output / "protocol.lock.json", {"created_utc": datetime.now(timezone.utc).isoformat(),
-         "protocol": protocol, "source_sha256": source_hashes(), "datasets": datasets})
+         "protocol": protocol, "source_inventory_version": 2,
+         "source_sha256": source_hashes(), "datasets": datasets})
     for relative in source_hashes():
         target = output / "source" / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -336,7 +339,7 @@ def verify(output, locked, *, audit_path=None):
                                  [portable_basename(p) for p in expected_config["instances"]]}
             if stored_config != comparable_config:
                 raise InputError(f"Configuration mismatch: {relative}")
-            expected_sources = {portable_basename(k): v for k, v in locked["source_sha256"].items() if k.startswith("src/")}
+            expected_sources = {k.removeprefix("src/"): v for k, v in locked["source_sha256"].items() if k.startswith("src/")}
             if manifest.get("source_sha256") != expected_sources:
                 raise InputError(f"Benchmark source differs from sealed study: {relative}")
             expected_instances = {read_instance(p).name: fingerprint(read_instance(p)) for p in expected_config["instances"]}
@@ -365,7 +368,11 @@ def verify(output, locked, *, audit_path=None):
             if result["instance_sha256"] != expected_instances.get(name):
                 raise InputError(f"Run uses an unregistered instance: {name}")
             if name not in instances:
-                instances[name] = read_instance(path.parent / "instances" / f"{name}.json")
+                instance_file = manifest.get("instance_files", {}).get(name, f"instances/{name}.json")
+                instance_path = (path.parent / instance_file).resolve()
+                if instance_path.parent != (path.parent / "instances").resolve():
+                    raise InputError(f"Instance path escapes its directory: {instance_file}")
+                instances[name] = read_instance(instance_path)
             instance = instances[name]
             if fingerprint(instance) != record["instance_sha256"] or fingerprint(instance) != result["instance_sha256"]:
                 raise InputError(f"Fingerprint mismatch: {path}")

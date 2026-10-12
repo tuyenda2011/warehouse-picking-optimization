@@ -312,13 +312,20 @@ def render_simulation(instance, result, height=750):
   /* Controls Bar */
   .controls-bar {{
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     background: #1e293b;
     border: 1px solid #334155;
     border-radius: 10px;
-    padding: 8px 14px;
+    padding: 6px 10px;
+    gap: 6px;
+    flex-shrink: 0;
+    min-width: 0;
+  }}
+  .control-row {{
+    display: flex;
+    align-items: center;
     gap: 10px;
+    width: 100%;
     flex-wrap: wrap;
     min-width: 0;
   }}
@@ -327,18 +334,37 @@ def render_simulation(instance, result, height=750):
     align-items: center;
     gap: 5px;
     min-width: 0;
-    flex-wrap: wrap;
+    flex-shrink: 0;
+  }}
+  .control-label, .playback-note {{
+    font-size: 13px;
+    line-height: 1.35;
+    color: #cbd5e1;
+  }}
+  .control-label {{
+    white-space: nowrap;
+  }}
+  .playback-note {{
+    flex: 1 1 165px;
+  }}
+  .view-group {{
+    margin-left: auto;
+  }}
+  button.sim-btn:focus-visible, .view-select:focus-visible, .timeline-slider:focus-visible {{
+    outline: 2px solid #f8fafc;
+    outline-offset: 3px;
   }}
   button.sim-btn {{
     background: #334155;
     color: #f8fafc;
     border: none;
-    padding: 6px 12px;
+    padding: 6px 9px;
+    min-height: 32px;
     border-radius: 6px;
     cursor: pointer;
     font-size: 13px;
     font-weight: 600;
-    transition: all 0.15s ease;
+    white-space: nowrap;
     display: flex;
     align-items: center;
     gap: 4px;
@@ -353,15 +379,14 @@ def render_simulation(instance, result, height=750):
     background: #1e8773;
   }}
   button.sim-btn.active {{
-    background: #2563eb;
+    background: #176b5b;
   }}
   .timeline-wrap {{
     display: flex;
     align-items: center;
-    gap: 10px;
-    flex: 1 1 440px;
+    gap: 8px;
+    flex: 1 1 350px;
     min-width: 0;
-    flex-wrap: wrap;
   }}
   .timeline-slider {{
     flex: 1;
@@ -385,17 +410,20 @@ def render_simulation(instance, result, height=750):
   }}
   .time-badge {{
     font-family: monospace;
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: bold;
     color: #38bdf8;
     background: #0f172a;
-    padding: 4px 10px;
+    padding: 5px 8px;
     border-radius: 5px;
     border: 1px solid #334155;
     min-width: 0;
     max-width: 100%;
     text-align: center;
-    white-space: normal;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
     overflow-wrap: anywhere;
   }}
   .view-select {{
@@ -404,7 +432,9 @@ def render_simulation(instance, result, height=750):
     border: 1px solid #475569;
     padding: 5px 8px;
     border-radius: 6px;
-    font-size: 12px;
+    min-height: 32px;
+    max-width: 180px;
+    font-size: 13px;
     font-weight: 500;
     outline: none;
     cursor: pointer;
@@ -435,9 +465,9 @@ def render_simulation(instance, result, height=750):
   /* Live HUD Cards */
   .hud-grid {{
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 225px), 1fr));
     gap: 8px;
-    max-height: 110px;
+    max-height: 100px;
     overflow-y: auto;
     min-width: 0;
     flex-shrink: 0;
@@ -446,12 +476,12 @@ def render_simulation(instance, result, height=750):
     background: #1e293b;
     border: 1px solid #334155;
     border-radius: 8px;
-    padding: 6px 10px;
+    padding: 7px 10px;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    font-size: 11px;
-    transition: border-color 0.2s;
+    font-size: 13px;
+    line-height: 1.35;
     min-width: 0;
     overflow-wrap: anywhere;
   }}
@@ -468,8 +498,8 @@ def render_simulation(instance, result, height=750):
     font-weight: bold;
   }}
   .picker-dot {{
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     display: inline-block;
     margin-right: 4px;
@@ -492,6 +522,12 @@ def render_simulation(instance, result, height=750):
     border-radius: 3px;
     transition: width 0.1s ease;
   }}
+  @media (max-width: 700px) {{
+    .timeline-wrap {{ flex-basis: 100%; }}
+    .playback-note {{ flex-basis: 100%; order: 3; }}
+    .view-group {{ flex-wrap: wrap; }}
+    .time-badge {{ max-width: 52%; }}
+  }}
 </style>
 </head>
 <body>
@@ -499,31 +535,34 @@ def render_simulation(instance, result, height=750):
 <div class="sim-container">
   <!-- Controls Bar -->
   <div class="controls-bar">
-    <div class="btn-group">
-      <button class="sim-btn" id="playBtn">⏸ Tạm dừng</button>
-      <button class="sim-btn" id="resetBtn" title="Tua về đầu">↺ Về đầu</button>
+    <div class="control-row">
+      <div class="btn-group">
+        <button class="sim-btn" id="playBtn">⏸ Tạm dừng</button>
+        <button class="sim-btn" id="resetBtn" title="Tua về đầu">↺ Về đầu</button>
+      </div>
+      <div class="timeline-wrap">
+        <label class="control-label" for="timelineSlider">Đồng hồ</label>
+        <input type="range" class="timeline-slider" id="timelineSlider" aria-label="Thời gian vận hành" min="0" max="100" step="0.05" value="0">
+        <div class="time-badge" id="timeBadge">00:00:00 / 00:00:00</div>
+      </div>
     </div>
-
-    <div class="timeline-wrap">
-      <span style="font-size: 12px; color: #94a3b8;">Thời gian:</span>
-      <input type="range" class="timeline-slider" id="timelineSlider" min="0" max="100" step="0.05" value="0">
-      <div class="time-badge" id="timeBadge">⏱️ 00:00 / 00:00</div>
-    </div>
-
-    <div class="btn-group">
-      <button class="sim-btn speed-btn" data-speed="0.5" title="Phát chậm (khoảng 60 giây)">0.5x</button>
-      <button class="sim-btn active speed-btn" data-speed="1" title="Tốc độ mặc định (khoảng 30 giây)">1x</button>
-      <button class="sim-btn speed-btn" data-speed="2" title="Phát nhanh (khoảng 15 giây)">2x</button>
-      <button class="sim-btn speed-btn" data-speed="5" title="Phát nhanh (khoảng 6 giây)">5x</button>
-    </div>
-
-    <div class="btn-group">
-      <button class="sim-btn" id="zoomInBtn" title="Phóng to">🔍+</button>
-      <button class="sim-btn" id="zoomOutBtn" title="Thu nhỏ">🔍-</button>
-      <button class="sim-btn" id="zoomResetBtn" title="Vừa khung hình">⛶</button>
-      <select class="view-select" id="viewSelect" title="Theo dõi nhân viên">
-        <option value="all">Tất cả nhân viên</option>
-      </select>
+    <div class="control-row">
+      <div class="btn-group">
+        <span class="control-label">Tốc độ phát</span>
+        <button class="sim-btn speed-btn" data-speed="0.5" title="Phát chậm (khoảng 60 giây)">0.5x</button>
+        <button class="sim-btn active speed-btn" data-speed="1" title="Phát toàn bộ lịch trong khoảng 30 giây; không phải thời gian thực">1x</button>
+        <button class="sim-btn speed-btn" data-speed="2" title="Phát nhanh (khoảng 15 giây)">2x</button>
+        <button class="sim-btn speed-btn" data-speed="5" title="Phát nhanh (khoảng 6 giây)">5x</button>
+      </div>
+      <span class="playback-note" title="Tốc độ phát chỉ thay đổi tốc độ xem; đồng hồ và lịch vận hành giữ nguyên.">1x: toàn lượt ≈ 30 giây</span>
+      <div class="btn-group view-group">
+        <button class="sim-btn" id="zoomInBtn" title="Phóng to" aria-label="Phóng to">🔍+</button>
+        <button class="sim-btn" id="zoomOutBtn" title="Thu nhỏ" aria-label="Thu nhỏ">🔍-</button>
+        <button class="sim-btn" id="zoomResetBtn" title="Vừa khung hình" aria-label="Vừa khung hình">⛶</button>
+        <select class="view-select" id="viewSelect" title="Theo dõi nhân viên" aria-label="Theo dõi nhân viên">
+          <option value="all">Tất cả nhân viên</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -829,12 +868,20 @@ def render_simulation(instance, result, height=750):
     if (timeScaleSeconds === null) {{
       return `⏱️ ${{formatNumber(curVal)}} / ${{formatNumber(maxVal)}} ${{timeUnit}}`;
     }}
-    return `⏱️ ${{formatClock(curVal)}} / ${{formatClock(maxVal)}}`;
+    function compactClock(val) {{
+      const totalSec = Math.max(0, Math.round(val * timeScaleSeconds));
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      return `${{String(h).padStart(2, '0')}}:${{String(m).padStart(2, '0')}}:${{String(s).padStart(2, '0')}}`;
+    }}
+    return `${{compactClock(curVal)}} / ${{compactClock(maxVal)}}`;
   }}
 
   // Update HUD
   function updateHUD() {{
     timeBadge.textContent = formatTimeBadge(simTime, makespan);
+    timeBadge.title = `Thời gian vận hành: ${{formatClock(simTime)}} / ${{formatClock(makespan)}}`;
     timelineSlider.value = simTime;
 
     simData.pickers.forEach(p => {{
@@ -944,7 +991,7 @@ def render_simulation(instance, result, height=750):
     ctx.stroke();
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = `bold ${{Math.max(7, Math.min(10, depotSize * 0.35))}}px sans-serif`;
+    ctx.font = `bold ${{Math.max(10, Math.min(12, depotSize * 0.4))}}px sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("DEPOT", dsx, dsy);
@@ -952,7 +999,7 @@ def render_simulation(instance, result, height=750):
     // 5. Calculate and draw pickers
     const aisleSpan = 8;
     const aisleScreenDist = aisleSpan * T.scale;
-    const pickerRadius = Math.max(6, Math.min(12, Math.max(7, aisleScreenDist * 0.75)));
+    const pickerRadius = Math.max(8, Math.min(13, aisleScreenDist * 0.75));
     const pickerStates = simData.pickers.map(p => ({{
       picker: p,
       state: getPickerState(p, simTime)
@@ -985,9 +1032,9 @@ def render_simulation(instance, result, height=750):
     const statusBadges = [];
     function drawStatusBadge(text, item, preferAbove = false) {{
       const marker = item.marker;
-      ctx.font = "bold 9px sans-serif";
+      ctx.font = "bold 11px sans-serif";
       const w = Math.max(52, ctx.measureText(text).width + 12);
-      const h = 16;
+      const h = 20;
       const above = {{ x: marker.x - w / 2, y: marker.y - pickerRadius - h - 3 }};
       const right = {{ x: marker.x + pickerRadius + 3, y: marker.y - h / 2 }};
       const candidates = [preferAbove ? above : right, preferAbove ? right : above,
@@ -1130,7 +1177,7 @@ def render_simulation(instance, result, height=750):
 
       // Picker Label (e.g. P1, P2)
       ctx.fillStyle = "#ffffff";
-      ctx.font = `bold ${{Math.max(7, Math.min(10, pickerRadius * 0.85))}}px sans-serif`;
+      ctx.font = `bold ${{Math.max(10, Math.min(12, pickerRadius * 0.95))}}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(`P${{p.id}}`, sx, sy);

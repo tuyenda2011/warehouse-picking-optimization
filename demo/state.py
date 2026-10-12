@@ -84,7 +84,9 @@ def run_scenario(instance, draft, progress=None):
         if progress:
             progress(index / len(methods), f"Đang chạy {method} · {index + 1}/{len(methods)}")
         results[method] = solve(instance, method, draft["seed"],
-                                SearchConfig(seconds=draft["seconds"], iterations=100000), weights)
+                                SearchConfig(seconds=draft["seconds"], iterations=100000,
+                                    candidate_policy=draft.get("candidate_policy", "uniform"),
+                                    incremental_validation=draft.get("incremental_validation", False)), weights)
     return {"instance": instance.to_dict(), "results": results, "draft": dict(draft),
             "seed": draft["seed"], "budget": draft["seconds"], "saved_playback": False}
 

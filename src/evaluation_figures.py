@@ -19,6 +19,7 @@ from .evaluation_charts.common import (
     _slug as _slug,
     _spec,
     representative_instances as representative_instances,
+    families_for as families_for,
 )
 from .evaluation_charts.quality import build_figures as _quality
 from .evaluation_charts.components import build_figures as _components
@@ -32,7 +33,7 @@ from .evaluation_charts.scalability import (
 
 def figure_specs(payload: dict, reference: str = "B2", group: str | None = None,
                  style: str = "report") -> list[dict[str, Any]]:
-    """Return five figure families per group, with explicit unavailable reasons."""
+    """Return core figures and planned sensitivity, with unavailable reasons."""
     from .evaluation import evaluation_tables, validate_evaluation
 
     validate_evaluation(payload)
@@ -52,7 +53,8 @@ def _figure_specs_from_tables(payload: dict, tables: dict, reference: str = "B2"
     try:
         import matplotlib
     except ImportError:
-        return [_spec(g, family, reason="Cần cài Matplotlib để tạo biểu đồ; bảng CSV vẫn dùng được.") for g in selected for family in FAMILIES]
+        return [_spec(g, family, reason="Cần cài Matplotlib để tạo biểu đồ; bảng CSV vẫn dùng được.")
+                for g in selected for family in families_for(g)]
     font = 20 if style == "presentation" else 10
     specs = []
     with matplotlib.rc_context({"font.family": "DejaVu Sans", "font.size": font,
@@ -60,6 +62,8 @@ def _figure_specs_from_tables(payload: dict, tables: dict, reference: str = "B2"
                                 "xtick.labelsize": font - 1, "ytick.labelsize": font - 1,
                                 "figure.titlesize": font + 2, "svg.fonttype": "none", "pdf.fonttype": 42}):
         for selected_group in selected:
+            if "sensitivity_condition" in selected_group["config"]:
+                continue
             rows = [row for row in tables["per_instance"] if row["group"] == selected_group["name"]]
             runs = _runs_by_instance(selected_group)
             specs.extend(_quality(selected_group, rows, reference, style))
@@ -67,6 +71,8 @@ def _figure_specs_from_tables(payload: dict, tables: dict, reference: str = "B2"
             specs.extend(_stability(selected_group, runs, style))
             specs.extend(_convergence(selected_group, runs, style))
             specs.extend(_scalability(selected_group, rows, reference, style))
+            from .evaluation_charts.sensitivity import build_figures
+            specs.extend(build_figures(payload, selected_group, tables, style))
     return specs
 
 

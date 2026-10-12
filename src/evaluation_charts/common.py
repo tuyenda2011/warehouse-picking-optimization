@@ -25,7 +25,15 @@ FAMILIES = {
     "stability": "Độ ổn định giữa các seed",
     "convergence": "Hội tụ theo thời gian thực",
     "scalability": "Thay đổi theo quy mô đơn hàng",
+    "budget": "Độ nhạy ngân sách thời gian",
+    "weights": "Đánh đổi theo trọng số",
 }
+
+
+def families_for(group):
+    if "sensitivity_condition" in group["config"]:
+        return []
+    return list(FAMILIES) if "sensitivity_design" in group["config"] else list(FAMILIES)[:5]
 
 
 METRIC_LABELS = {"distance": "Quãng đường", "makespan": "Thời gian hoàn tất", "tardiness": "Tổng trễ hạn"}

@@ -7,6 +7,22 @@
     "references": ["B0", "B2", "LNS", "VNS"],
     "weights": [0.3333333333333333, 0.3333333333333333, 0.3333333333333333]
   },
+  "sensitivity": {
+    "enabled": true,
+    "instances_per_group": 3,
+    "search_seeds": [1, 2, 3, 4, 5],
+    "time_budgets": [0.5, 3.0, 6.0],
+    "weight_seconds": 3.0,
+    "weight_profiles": ["balanced", "distance", "tardiness"],
+    "schedule_seed": 20261011,
+    "presets": {
+      "quick": {
+        "search_seeds": [1, 2],
+        "time_budgets": [0.01, 0.02, 0.03],
+        "weight_seconds": 0.02
+      }
+    }
+  },
   "presets": {
     "quick": {
       "search_seeds": [1, 2],
