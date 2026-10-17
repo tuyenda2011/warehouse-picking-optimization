@@ -114,33 +114,8 @@ data/raw/
 !/docs/EVALUATION.md
 
 # ==========================================
-# 7. Academic Report: Only track files related to main.pdf
+# 7. Academic report: track PDF files only
 # ==========================================
-/report/*
-!/report/main.tex
-!/report/main.pdf
-!/report/section/
-/report/section/*
-!/report/section/section[1-5].tex
-!/report/section/ref.tex
-!/report/image/
-/report/image/*
-!/report/image/Logo.png
-!/report/generated/
-/report/generated/*
-!/report/generated/numbers.tex
-
-# LaTeX intermediate build artifacts
-report/**/*.aux
-report/**/*.log
-report/**/*.out
-report/**/*.toc
-report/**/*.lof
-report/**/*.lot
-report/**/*.thm
-report/**/*.synctex.gz
-report/**/*.fls
-report/**/*.fdb_latexmk
-report/build_*.log
-
-
+/report/**
+!/report/**/
+!/report/**/*.pdf

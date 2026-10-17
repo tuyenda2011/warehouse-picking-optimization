@@ -1,0 +1,134 @@
+[
+  {
+    "file": "single_block.gif",
+    "scenario": "single_block",
+    "instance": "synthetic-n10-seed42",
+    "seed": 42,
+    "method": "ALNS",
+    "iterations": 30,
+    "seconds": 0,
+    "validated": true,
+    "coordinate_units": "metre",
+    "display_time_factor": 1,
+    "metrics": {
+      "distance": 408.0,
+      "makespan": 5.166666666666667,
+      "tardiness": 4.943490865487937,
+      "late_orders": 6,
+      "batches": 3,
+      "used_pickers": 3,
+      "on_time_rate": 0.4,
+      "objective": 0.6266107969362165
+    }
+  },
+  {
+    "file": "double_block.gif",
+    "scenario": "double_block",
+    "instance": "double_block-synthetic-n30-seed42",
+    "seed": 42,
+    "method": "ALNS",
+    "iterations": 30,
+    "seconds": 0,
+    "validated": true,
+    "coordinate_units": "metre",
+    "display_time_factor": 1,
+    "metrics": {
+      "distance": 1208.0,
+      "makespan": 15.0,
+      "tardiness": 45.01603038429713,
+      "late_orders": 14,
+      "batches": 8,
+      "used_pickers": 3,
+      "on_time_rate": 0.5333333333333333,
+      "objective": 0.55259195819207
+    }
+  },
+  {
+    "file": "mega_hub.gif",
+    "scenario": "mega_hub",
+    "instance": "mega_hub-synthetic-n40-seed42",
+    "seed": 42,
+    "method": "ALNS",
+    "iterations": 30,
+    "seconds": 0,
+    "validated": true,
+    "coordinate_units": "metre",
+    "display_time_factor": 1,
+    "metrics": {
+      "distance": 2520.0,
+      "makespan": 16.446666666666665,
+      "tardiness": 27.182316536373456,
+      "late_orders": 14,
+      "batches": 9,
+      "used_pickers": 5,
+      "on_time_rate": 0.65,
+      "objective": 0.5549535683645029
+    }
+  },
+  {
+    "file": "rush_hour.gif",
+    "scenario": "rush_hour",
+    "instance": "rush_hour-synthetic-n25-seed42",
+    "seed": 42,
+    "method": "ALNS",
+    "iterations": 30,
+    "seconds": 0,
+    "validated": true,
+    "coordinate_units": "metre",
+    "display_time_factor": 1,
+    "metrics": {
+      "distance": 1120.0,
+      "makespan": 9.926666666666666,
+      "tardiness": 64.6225455149717,
+      "late_orders": 22,
+      "batches": 8,
+      "used_pickers": 4,
+      "on_time_rate": 0.12,
+      "objective": 0.570319573922788
+    }
+  },
+  {
+    "file": "abc_zonal.gif",
+    "scenario": "abc_zonal",
+    "instance": "abc_zonal-synthetic-n35-seed42",
+    "seed": 42,
+    "method": "ALNS",
+    "iterations": 30,
+    "seconds": 0,
+    "validated": true,
+    "coordinate_units": "metre",
+    "display_time_factor": 1,
+    "metrics": {
+      "distance": 1008.0,
+      "makespan": 11.233333333333333,
+      "tardiness": 38.3204136733918,
+      "late_orders": 16,
+      "batches": 8,
+      "used_pickers": 4,
+      "on_time_rate": 0.5428571428571429,
+      "objective": 0.5235810022374456
+    }
+  },
+  {
+    "file": "kris_small.gif",
+    "scenario": "kris_small",
+    "instance": "Kris-instances_100_1",
+    "seed": 42,
+    "method": "ALNS",
+    "iterations": 30,
+    "seconds": 0,
+    "validated": true,
+    "coordinate_units": "source",
+    "display_time_factor": 0.0005555555555555556,
+    "metrics": {
+      "distance": 17782.0,
+      "makespan": 51156.0,
+      "tardiness": 0.0,
+      "late_orders": 0,
+      "batches": 3,
+      "used_pickers": 2,
+      "on_time_rate": 1.0,
+      "objective": 0.5644610422504419
+    }
+  }
+]
