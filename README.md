@@ -1,4 +1,4 @@
-# 📦 Warehouse Joint Optimizer
+# 📦 Tối ưu hóa đa mục tiêu quy trình lấy hàng trong kho hàng
 
 **Tối ưu gom đơn, định tuyến và lập lịch lấy hàng cho nhiều nhân viên.**
 
@@ -178,5 +178,5 @@ results/          Kết quả sinh khi chạy, Git bỏ qua
 ```
 
 - [Nguồn và chuẩn bị dữ liệu](data/README.md)
-- [Báo cáo PDF](report/main.pdf)
+- [Báo cáo PDF](report/T%E1%BB%91i%20%C6%B0u%20h%C3%B3a%20%C4%91a%20m%E1%BB%A5c%20ti%C3%AAu%20quy%20tr%C3%ACnh%20l%E1%BA%A5y%20h%C3%A0ng%20trong%20kho%20h%C3%A0ng.pdf)
 - [Mã nguồn báo cáo](report/main.tex)

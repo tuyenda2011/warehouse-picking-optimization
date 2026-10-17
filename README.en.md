@@ -1,4 +1,4 @@
-# 📦 Warehouse Joint Optimizer
+# 📦 Warehouse picking optimization
 
 **Joint order batching, routing and scheduling for multiple warehouse pickers.**
 
@@ -177,5 +177,5 @@ results/          Generated results, Git-ignored
 ```
 
 - [Data sources and preparation](data/README.md)
-- [Report PDF](report/main.pdf)
+- [Report PDF](report/T%E1%BB%91i%20%C6%B0u%20h%C3%B3a%20%C4%91a%20m%E1%BB%A5c%20ti%C3%AAu%20quy%20tr%C3%ACnh%20l%E1%BA%A5y%20h%C3%A0ng%20trong%20kho%20h%C3%A0ng.pdf)
 - [Report source](report/main.tex)
